@@ -1,0 +1,9 @@
+{
+    "name": "batyo/ledger-manage-cli",
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/"
+        }
+    },
+    "require": {}
+}

@@ -1,0 +1,36 @@
+#!/usr/bin/env php
+<?php
+
+require_once __DIR__ . '/../vendor/autoload.php';
+
+use App\Console\Application;
+
+// 設定ファイルからDBパスを取得
+$config = require(__DIR__ . '/../config/config.php');
+$dbPath = $config['sqlite_path'];
+$logPath = $config['log_path'];
+
+// コマンドライン引数を渡してアプリケーションを起動
+$app = new Application($dbPath);
+
+try {
+    $app->run($argv);
+
+} catch (\InvalidArgumentException $e) {
+    // 入力バリデーション等の利用者エラーは明示的に表示
+    fwrite(STDERR, "入力エラー: " . $e->getMessage() . PHP_EOL);
+    // ログに詳細を残す
+    $logFile = $logPath;
+    $msg = sprintf("[%s] %s: %s in %s:%d\nStack trace:\n%s\n\n", date('c'), get_class($e), $e->getMessage(), $e->getFile(), $e->getLine(), $e->getTraceAsString());
+    error_log($msg, 3, $logFile);
+    exit(1);
+
+} catch (\Throwable $e) {
+    // 内部エラーは利用者向けには汎用メッセージのみ表示
+    fwrite(STDERR, "予期しないエラーが発生しました。詳細はログを参照してください。\n");
+    // ログに詳細を残す
+    $logFile = $logPath;
+    $msg = sprintf("[%s] %s: %s in %s:%d\nStack trace:\n%s\n\n", date('c'), get_class($e), $e->getMessage(), $e->getFile(), $e->getLine(), $e->getTraceAsString());
+    error_log($msg, 3, $logFile);
+    exit(2);
+}
