@@ -88,4 +88,48 @@ class LedgerEnrtry
     {
         return array_filter($this->transactions, fn($t) => $t->accountId === $accountId);
     }
+
+
+    /**
+     * カテゴリーごとの合計収入を取得する
+     *
+     * @return array カテゴリーごとの合計収入を持った配列 [categoryId => totalIncomeByCategory]
+     */
+    public function getIncomeByCategories(): array
+    {
+        $summary = [];
+        $txs = $this->transactions;
+        
+        foreach ($txs as $tx) {
+            if (!$tx->isIncome()) continue;
+            if (!key_exists($tx->categoryId, $summary)) {
+                $summary[$tx->categoryId] = 0;
+            }
+            $summary[$tx->categoryId] += $tx->amount;
+        }
+
+        return $summary;
+    }
+
+
+    /**
+     * カテゴリーごとの合計支出を取得する
+     *
+     * @return array カテゴリーごとの合計支出を持った配列 [categoryId => totalExpenseByCategory]
+     */
+    public function getExpenseByCategories(): array
+    {
+        $summary = [];
+        $txs = $this->transactions;
+        
+        foreach ($txs as $tx) {
+            if (!$tx->isExpense()) continue;
+            if (!key_exists($tx->categoryId, $summary)) {
+                $summary[$tx->categoryId] = 0;
+            }
+            $summary[$tx->categoryId] += $tx->amount;
+        }
+
+        return $summary;
+    }
 }

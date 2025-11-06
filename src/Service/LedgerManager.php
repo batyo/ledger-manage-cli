@@ -61,7 +61,9 @@ class LedgerManager
         return [
             'income' => $ledger->getTotalIncome(),
             'expense' => $ledger->getTotalExpense(),
-            'balance' => $ledger->getBalance()
+            'balance' => $ledger->getBalance(),
+            'incomeByCategories' => $ledger->getIncomeByCategories(),
+            'expenseByCategories' => $ledger->getExpenseByCategories()
         ];
     }
 }

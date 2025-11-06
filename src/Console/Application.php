@@ -396,10 +396,31 @@ class Application
     {
         $period = $argv[2] ?? date('Y-m');
         $summary = $manager->summary($period);
-        echo "Summary for {$period}:\n";
+
+        $categoryMap = [];
+        $categories = $this->categoryManager->findCategories();
+        foreach ($categories as $c) {
+            $categoryMap[$c->id] = $c->name;
+        }
+
+        arsort($summary['incomeByCategories']);
+        arsort($summary['expenseByCategories']);
+
+        echo "Summary for {$period}:\n\n";
         echo "Income: {$summary['income']}\n";
         echo "Expense: {$summary['expense']}\n";
-        echo "Balance: {$summary['balance']}\n";
+        echo "Balance: {$summary['balance']}\n\n";
+        echo "By Categories\n\n";
+        echo "--Income--\n";
+        foreach ($summary['incomeByCategories'] as $catId => $value) {
+            $name = $categoryMap[$catId] ?? (string)$catId;
+            echo "{$name}: {$value}\n";
+        }
+        echo "\n--Expense--\n";
+        foreach ($summary['expenseByCategories'] as $catId => $value) {
+            $name = $categoryMap[$catId] ?? (string)$catId;
+            echo "{$name}: {$value}\n";
+        }
     }
 
     /**
