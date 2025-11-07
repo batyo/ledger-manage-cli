@@ -447,6 +447,8 @@ class SqliteRepository implements RepositoryInterface
 
     /**
      * アカウント一覧を取得する
+     * 
+     * @return AccountEntry[] アカウントエントリの配列
      */
     public function fetchAllAccounts(): array
     {
