@@ -162,4 +162,20 @@ class CategoryManager
     {
         return $this->repo->fetchAllCategories();
     }
+
+
+    /**
+     * カテゴリIDをキー、カテゴリ名を値とする連想配列を取得する
+     *
+     * @return array<int, string> カテゴリIDをキー、カテゴリ名を値とする連想配列
+     */
+    public function getCategoryMap(): array
+    {
+        $categoryMap = [];
+        $categories = $this->findCategories();
+        foreach ($categories as $c) {
+            $categoryMap[$c->id] = $c->name;
+        }
+        return $categoryMap;
+    }
 }

@@ -61,13 +61,13 @@ class Application
                 $this->executeDeleteTransaction($argv, $this->transactionManager);
                 break;
             case 'list-txs':
-                $this->listTransactions($argv, $this->transactionManager);
+                $this->listTransactions($argv, $this->transactionManager, $this->categoryManager, $this->accountManager);
                 break;
             case 'add-ledger':
                 $this->executeAddLedger($argv, $this->ledgerManager, $this->transactionManager);
                 break;
             case 'summary':
-                $this->summary($argv, $this->ledgerManager);
+                $this->summary($argv, $this->ledgerManager, $this->categoryManager);
                 break;
             case 'add-account':
                 $this->executeAddAccount($argv, $this->accountManager);
@@ -292,9 +292,9 @@ class Application
      * 取引の一覧を表示する
      * 
      * @param array $argv コマンドライン引数の配列
-     * @param TransactionManager $manager 台帳管理サービス
+     * @param TransactionManager $txManager 台帳管理サービス
      */
-    private function listTransactions(array $argv, TransactionManager $manager): void
+    private function listTransactions(array $argv, TransactionManager $txManager, CategoryManager $catManager, AccountManager $accManager): void
     {
         $options = $this->parseListOptions(array_slice($argv, 2));
 
@@ -315,14 +315,22 @@ class Application
             $filter['transfer_group_id'] = (int)$options['transfer'];
         }
 
-        $transactions = $manager->filterTransactions($filter);
+        $transactions = $txManager->filterTransactions($filter);
         if (empty($transactions)) {
             echo "No transaction.\n";
             exit();
         }
 
         foreach ($transactions as $t) {
-            echo "{$t->id} {$t->date->format('Y-m-d')} amount:{$t->amount} category:{$t->categoryId} account:{$t->accountId} type:{$t->transactionType} note:{$t->note} tran_group:{$t->transferGroupId}\n";
+            $categoryMap = $catManager->getCategoryMap();
+            $categoryName = $categoryMap[$t->categoryId] ?? (string)$t->categoryId;
+
+            $accountMap = $accManager->getAccountMap();
+            $accountName = $accountMap[$t->accountId] ?? (string)$t->accountId;
+
+            $txType = $txManager->getTxType($t);
+            
+            echo "{$t->id} {$t->date->format('Y-m-d')} ¥{$t->amount} {$categoryName}({$t->categoryId}) {$accountName}({$t->accountId}) {$txType} [{$t->note}] tran_group:{$t->transferGroupId}\n";
         }
     }
 
@@ -390,18 +398,14 @@ class Application
      * 指定された期間の収支概要を表示する
      *
      * @param array $argv コマンドライン引数の配列
-     * @param LedgerManager $manager 台帳管理サービス
+     * @param LedgerManager $ledManager 台帳管理サービス
      */
-    private function summary(array $argv, LedgerManager $manager): void
+    private function summary(array $argv, LedgerManager $ledManager, CategoryManager $catManager): void
     {
         $period = $argv[2] ?? date('Y-m');
-        $summary = $manager->summary($period);
+        $summary = $ledManager->summary($period);
 
-        $categoryMap = [];
-        $categories = $this->categoryManager->findCategories();
-        foreach ($categories as $c) {
-            $categoryMap[$c->id] = $c->name;
-        }
+        $categoryMap = $catManager->getCategoryMap();
 
         arsort($summary['incomeByCategories']);
         arsort($summary['expenseByCategories']);
@@ -585,6 +589,12 @@ class Application
     private function listCategories(CategoryManager $manager): void
     {
         $categories = $manager->findCategories();
+
+        if (empty($categories)) {
+            echo "No categories.";
+            return;
+        }
+
         foreach ($categories as $category) {
             $type = $category->isIncomeCategory() ? 'Income' : ($category->isExpenseCategory() ? 'Expense' : 'Transfer');
             echo "{$category->id} {$category->name} ({$type})\n";
@@ -695,8 +705,15 @@ class Application
     private function listAccounts(AccountManager $manager): void
     {
         $accounts = $manager->findAccounts();
-        foreach ($accounts as $acount) {
-            echo "{$acount->id} {$acount->name} Type: {$acount->accountType} Balance: {$acount->balance}\n";
+
+        if (empty($accounts)) {
+            echo "No accounts.";
+            return;
+        }
+
+        foreach ($accounts as $account) {
+            $typeName = $account->getAccountTypeName($account->accountType);
+            echo "{$account->id} {$account->name}  {$typeName}({$account->accountType}) ¥{$account->balance}\n";
         }
     }
 

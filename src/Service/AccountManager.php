@@ -136,8 +136,29 @@ class AccountManager
     }
 
 
+    /**
+     * すべてのアカウントを取得する
+     * 
+     * @return AccountEntry[] アカウントエントリの配列
+     */
     public function findAccounts(): array
     {
         return $this->repo->fetchAllAccounts();
+    }
+
+
+    /**
+     * アカウントIDをキー、アカウント名を値とする連想配列を取得する
+     *
+     * @return array<int, string> アカウントIDをキー、アカウント名を値とする連想配列
+     */
+    public function getAccountMap(): array
+    {
+        $accountMap = [];
+        $accounts = $this->findAccounts();
+        foreach ($accounts as $account) {
+            $accountMap[$account->id] = $account->name;
+        }
+        return $accountMap;
     }
 }
