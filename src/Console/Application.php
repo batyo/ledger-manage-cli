@@ -783,9 +783,11 @@ class Application
         echo "Usage: php app.php [command] [options]\n";
         echo "Commands:\n";
         echo "  init-db                     Initialize the database\n";
-        echo "  add-transaction [date] [amount] [categoryId] [accountId] [transactionType] [note]  Add a new transaction\n";
-        echo "  update-transaction [--field ...] [ID] [values ...]  Update fields of a transaction\n";
-        echo "  list-transactions           List all transactions\n";
+        echo "  add-tx [date] [amount] [categoryId] [accountId] [transactionType] [note]  Add a new transaction\n";
+        echo "  update-tx [--field ...] [ID] [values ...]  Update fields of a transaction\n";
+        echo "  delete-tx [ID]              Delete a transaction\n";
+        echo "  list-txs           List all transactions\n";
+        echo "  transfer [date] [amount] [fromAccountId] [toAccountId] [categoryId?] [note?]  Add a transfer transaction\n";
         echo "  add-ledger [period]        Add a new ledger for the given period (e.g., '2023-09')\n";
         echo "  summary [period]            Show summary for a given period (e.g., '2023-09')\n";
         echo "  add-account [name] [type] [balance]  Add a new account\n";
@@ -795,5 +797,7 @@ class Application
         echo "  update-category [--field ...] [ID] [values ...]  Update fields of a category\n";
         echo "  delete-category [--reassign] [--force] [ID] [reassignID]  Delete a category\n";
         echo "  list-categories             List all categories\n";
+        echo "  list-ledgerTxs              List all ledger-transaction associations\n";
+        echo "  list-audit [--txId=] [--operate=]  List audit logs\n";
     }
 }
