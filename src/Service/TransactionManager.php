@@ -642,4 +642,20 @@ class TransactionManager
     {
         return $this->repo->fetchTransactions($filter);
     }
+
+
+    /**
+     * 取引タイプ名を取得する
+     *
+     * @param TransactionEntry $tx
+     * @return string 取引タイプ名
+     */
+    public function getTxType(TransactionEntry $tx): string
+    {
+        $txType = "Unkown";
+        if ($tx->isIncome()) $txType = "Income";
+        if ($tx->isExpense()) $txType = "Expense";
+        if ($tx->isTransfer()) $txType = "Transfer";
+        return $txType;
+    }
 }

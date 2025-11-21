@@ -107,4 +107,15 @@ class AccountEntry
             $actualBalance
         );
     }
+
+
+    /**
+     * アカウントタイプ名を取得する
+     *
+     * @return string アカウントタイプ名
+     */
+    public function getAccountTypeName(): string
+    {
+        return self::ACCOUNT_TYPE_NAME[$this->accountType];
+    }
 }
