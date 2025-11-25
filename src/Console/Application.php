@@ -63,6 +63,9 @@ class Application
             case 'list-txs':
                 $this->listTransactions($argv, $this->transactionManager, $this->categoryManager, $this->accountManager);
                 break;
+            case 'download-txs-csv':
+                $this->executeTxListToCsv($argv, $this->transactionManager, $this->categoryManager, $this->accountManager);
+                break;
             case 'add-ledger':
                 $this->executeAddLedger($argv, $this->ledgerManager, $this->transactionManager);
                 break;
@@ -363,6 +366,63 @@ class Application
             }
         }
         return $opts;
+    }
+
+
+    /**
+     * 指定期間の取引を CSV に保存する
+     *
+     * Usage:
+     *   bin/ledger txListToCsv [period] [outputPath?]
+     *   period: YYYY-MM（省略時は当月）
+    */
+    private function executeTxListToCsv(array $argv, TransactionManager $manager, CategoryManager $catManager, AccountManager $accManager): void
+    {
+        $period = $argv[2] ?? date('Y-m');
+        $date = \DateTimeImmutable::createFromFormat('Y-m', $period);
+        if (!$date) {
+            throw new \InvalidArgumentException('Please specify the period in YYYY-MM format.');
+        }
+
+        $output = $argv[3] ?? __DIR__ . "/../../data/download/txlist_{$period}.csv";
+
+        $transactions = $manager->filterTransactions(['period' => $period]);
+        if (empty($transactions)) {
+            echo "No transaction.\n";
+            return;
+        }
+
+        $catMap = $catManager->getCategoryMap();
+        $accMap = $accManager->getAccountMap();
+
+        $fp = fopen($output, 'w');
+        if ($fp === false) {
+            throw new \RuntimeException("Unable to open file for writing: {$output}");
+        }
+
+        // ヘッダ
+        fputcsv($fp, ['id', 'date', 'amount', 'category', 'category_id', 'account', 'account_id', 'type', 'type_id', 'note', 'transfer_group_id']);
+
+        foreach ($transactions as $t) {
+            // $t は App\Entity\TransactionEntry を想定
+            $row = [
+                $t->id,
+                $t->date->format('Y-m-d'),
+                $t->amount,
+                $catMap[$t->categoryId] ?? (string)$t->categoryId,
+                $t->categoryId,
+                $accMap[$t->accountId] ?? (string)$t->accountId,
+                $t->accountId,
+                $manager->getTxType($t),
+                $t->transactionType,
+                $t->note ?? '',
+                $t->transferGroupId ?? ''
+            ];
+            fputcsv($fp, $row);
+        }
+        fclose($fp);
+
+        echo "CSV saved to {$output}\n";
     }
 
 
@@ -787,6 +847,7 @@ class Application
         echo "  update-tx [--field ...] [ID] [values ...]  Update fields of a transaction\n";
         echo "  delete-tx [ID]              Delete a transaction\n";
         echo "  list-txs           List all transactions\n";
+        echo "  download-txs-csv [period] [outputPath?]  Download transactions as CSV for the given period\n";
         echo "  transfer [date] [amount] [fromAccountId] [toAccountId] [categoryId?] [note?]  Add a transfer transaction\n";
         echo "  add-ledger [period]        Add a new ledger for the given period (e.g., '2023-09')\n";
         echo "  summary [period]            Show summary for a given period (e.g., '2023-09')\n";
