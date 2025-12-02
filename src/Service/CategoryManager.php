@@ -41,6 +41,39 @@ class CategoryManager
 
 
     /**
+     * カテゴリ更新時の妥当性検証を行う
+     *
+     * @param int $id カテゴリID
+     * @param mixed $name カテゴリ名
+     * @param mixed $categoryType カテゴリタイプ
+     * @throws \InvalidArgumentException
+     */
+    public function validateCategoryForUpdate(int $id, mixed $name, mixed $categoryType): void
+    {
+        $currentEntry = $this->repo->fetchCategoryById($id);
+        if ($currentEntry === null) {
+            throw new \InvalidArgumentException('Category not found.');
+        }
+
+        if (!Validator::validateCategoryName($name)) {
+            throw new \InvalidArgumentException('Invalid category name.');
+        }
+
+        $fetchEntry = $this->repo->fetchCategoryByName($name);
+        $isSameName = $currentEntry->name === $name;
+
+        // 名前が変更されていて、かつ既に存在する名前の場合はエラー
+        if ($fetchEntry !== null && !$isSameName) {
+            throw new \InvalidArgumentException('Category name already exists.');
+        }
+
+        if (!Validator::validateCategoryType($categoryType)) {
+            throw new \InvalidArgumentException('Invalid category type.');
+        }
+    }
+
+
+    /**
      * 新しいカテゴリを登録する
      * 
      * @param CategoryEntry $entry 追加するカテゴリ
@@ -161,6 +194,18 @@ class CategoryManager
     public function findCategories(): array
     {
         return $this->repo->fetchAllCategories();
+    }
+
+
+    /**
+     * 指定IDのカテゴリを取得する
+     *
+     * @param int $id カテゴリID
+     * @return CategoryEntry|null カテゴリエントリ、または存在しない場合は null
+     */
+    public function findCategoryById(int $id): ?CategoryEntry
+    {
+        return $this->repo->fetchCategoryById($id);
     }
 
 
