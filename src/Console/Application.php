@@ -558,6 +558,11 @@ class Application
         }
         $id = (int)$idToken;
 
+        $currCategory = $manager->findCategoryById($id);
+        if ($currCategory === null) {
+            throw new \InvalidArgumentException("Category id={$id} not found.");
+        }
+
         // 残りの位置引数は、flagsWithoutValue の順に割り当てる
         $posValues = array_slice($args, $i);
         if (count($posValues) !== count($flagsWithoutValue)) {
@@ -569,10 +574,10 @@ class Application
             $updates[$key] = $posValues[$idx];
         }
 
-        $newName = isset($updates['name']) ? (string)$updates['name'] : null;
-        $newType = isset($updates['type']) ? (int)$updates['type'] : null;
+        $newName = isset($updates['name']) ? (string)$updates['name'] : $currCategory->name;
+        $newType = isset($updates['type']) ? (int)$updates['type'] : $currCategory->categoryType;
 
-        $manager->validateCategory($newName, $newType);
+        $manager->validateCategoryForUpdate($currCategory->id, $newName, $newType);
 
         $manager->updateCategoryFields($id, $newName, $newType);
         echo "Category id={$id} updated.\n";
@@ -735,6 +740,11 @@ class Application
         }
         $id = (int)$idToken;
 
+        $currAccount = $manager->findAccountById($id);
+        if ($currAccount === null) {
+            throw new \InvalidArgumentException("Account id={$id} not found.");
+        }
+
         // 残りの位置引数は、flagsWithoutValue の順に割り当てる
         $posValues = array_slice($args, $i);
         if (count($posValues) !== count($flagsWithoutValue)) {
@@ -746,11 +756,11 @@ class Application
             $updates[$key] = $posValues[$idx];
         }
 
-        $newName = isset($updates['name']) ? (string)$updates['name'] : null;
-        $newType = isset($updates['type']) ? (int)$updates['type'] : null;
-        $newBalance = isset($updates['balance']) ? (float)$updates['balance'] : null;
+        $newName = isset($updates['name']) ? (string)$updates['name'] : $currAccount->name;
+        $newType = isset($updates['type']) ? (int)$updates['type'] : $currAccount->accountType;
+        $newBalance = isset($updates['balance']) ? (float)$updates['balance'] : $currAccount->balance;
 
-        $manager->validateAccount($newName, $newType, $newBalance);
+        $manager->validateAccountForUpdate($currAccount->id, $newName, $newType, $newBalance);
 
         $manager->updateAccountFields($id, $newName, $newType, $newBalance);
         echo "Account id={$id} updated.\n";

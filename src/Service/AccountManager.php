@@ -50,6 +50,44 @@ class AccountManager
 
 
     /**
+     * アカウント更新時の妥当性検証を行う
+     *
+     * @param int $id
+     * @param mixed $name
+     * @param mixed $type
+     * @param mixed $balance
+     * @throws \InvalidArgumentException
+     */
+    public function validateAccountForUpdate(int $id, mixed $name, mixed $type, mixed $balance): void
+    {
+        $currentEntry = $this->repo->fetchAccountById($id);
+        if ($currentEntry === null) {
+            throw new \InvalidArgumentException('Account not found.');
+        }
+
+        if (!Validator::validateAccountName($name)) {
+            throw new \InvalidArgumentException('Invalid account name.');
+        }
+
+        $fetchEntry = $this->repo->fetchAccountByName($name);
+        $isSameName = ($currentEntry->name === $name);
+
+        // 名前が変更されていて、かつ既に存在する名前の場合はエラー
+        if ($fetchEntry !== null && !$isSameName) {
+            throw new \InvalidArgumentException('Account name already exists.');
+        }
+
+        if (!Validator::validateAccountType($type)) {
+            throw new \InvalidArgumentException('Invalid account type.');
+        }
+
+        if (!Validator::validateAccountBalance($balance)) {
+            throw new \InvalidArgumentException('Invalid account balance.');
+        }
+    }
+
+
+    /**
      * 複数カラムをまとめて更新する
      *
      * @param int $id
@@ -144,6 +182,18 @@ class AccountManager
     public function findAccounts(): array
     {
         return $this->repo->fetchAllAccounts();
+    }
+
+
+    /**
+     * 指定IDのアカウントを取得する
+     *
+     * @param int $id アカウントID
+     * @return AccountEntry|null アカウントエントリ、または見つからなかった場合は null
+     */
+    public function findAccountById(int $id): ?AccountEntry
+    {
+        return $this->repo->fetchAccountById($id);
     }
 
 
