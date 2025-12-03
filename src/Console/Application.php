@@ -463,14 +463,17 @@ class Application
     private function summary(array $argv, LedgerManager $ledManager, CategoryManager $catManager): void
     {
         $period = $argv[2] ?? date('Y-m');
-        $summary = $ledManager->summary($period);
+        isset($argv[3]) ? $toPeriod = $argv[3] : $toPeriod = null;
+
+        $summary = $ledManager->summary($period, $toPeriod);
 
         $categoryMap = $catManager->getCategoryMap();
 
         arsort($summary['incomeByCategories']);
         arsort($summary['expenseByCategories']);
 
-        echo "Summary for {$period}:\n\n";
+        $toPeriodDisplay = $toPeriod ?? $period;
+        echo "Summary for {$period} ~ {$toPeriodDisplay}:\n\n";
         echo "Income: {$summary['income']}\n";
         echo "Expense: {$summary['expense']}\n";
         echo "Balance: {$summary['balance']}\n\n";
