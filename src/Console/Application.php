@@ -855,23 +855,23 @@ class Application
     {
         echo "Usage: php app.php [command] [options]\n";
         echo "Commands:\n";
-        echo "  init-db                     Initialize the database\n";
-        echo "  add-tx [date] [amount] [categoryId] [accountId] [transactionType] [note]  Add a new transaction\n";
-        echo "  update-tx [--field ...] [ID] [values ...]  Update fields of a transaction\n";
-        echo "  delete-tx [ID]              Delete a transaction\n";
-        echo "  list-txs           List all transactions\n";
-        echo "  download-txs-csv [period] [outputPath?]  Download transactions as CSV for the given period\n";
-        echo "  transfer [date] [amount] [fromAccountId] [toAccountId] [categoryId?] [note?]  Add a transfer transaction\n";
-        echo "  add-ledger [period]        Add a new ledger for the given period (e.g., '2023-09')\n";
-        echo "  summary [period]            Show summary for a given period (e.g., '2023-09')\n";
-        echo "  add-account [name] [type] [balance]  Add a new account\n";
-        echo "  update-account [--field ...] [ID] [values ...]  Update fields of an account\n";
-        echo "  list-accounts              List all accounts\n";
-        echo "  add-category [name] [type]  Add a new category (type: 1 for INCOME, 2 for EXPENSE)\n";
-        echo "  update-category [--field ...] [ID] [values ...]  Update fields of a category\n";
-        echo "  delete-category [--reassign] [--force] [ID] [reassignID]  Delete a category\n";
-        echo "  list-categories             List all categories\n";
-        echo "  list-ledgerTxs              List all ledger-transaction associations\n";
-        echo "  list-audit [--txId=] [--operate=]  List audit logs\n";
+        echo "  init-db\n\tInitialize the database\n";
+        echo "  add-tx [date] [amount] [categoryId] [accountId] [transactionType] [note]\n\tAdd a new transaction\n";
+        echo "  update-tx [--field ...] [ID] [values ...]\n\tUpdate fields of a transaction\n";
+        echo "  delete-tx [ID]\n\tDelete a transaction\n";
+        echo "  list-txs\n\tList all transactions\n";
+        echo "  download-txs-csv [period] [outputPath?]\n\tDownload transactions as CSV for the given period\n";
+        echo "  transfer [date] [amount] [fromAccountId] [toAccountId] [categoryId?] [note?]\n\tAdd a transfer transaction\n";
+        echo "  add-ledger [period]\n\tAdd a new ledger for the given period (e.g., '2023-09')\n";
+        echo "  summary [fromPeriod] [toPeriod?]\n\tShow summary for a given period (e.g., '2023-09')\n";
+        echo "  add-account [name] [type] [balance]\n\tAdd a new account\n";
+        echo "  update-account [--field ...] [ID] [values ...]\n\tUpdate fields of an account\n";
+        echo "  list-accounts\n\tList all accounts\n";
+        echo "  add-category [name] [type]\n\tAdd a new category (type: 1 for INCOME, 2 for EXPENSE)\n";
+        echo "  update-category [--field ...] [ID] [values ...]\n\tUpdate fields of a category\n";
+        echo "  delete-category [--reassign] [--force] [ID] [reassignID]\n\tDelete a category\n";
+        echo "  list-categories\n\tList all categories\n";
+        echo "  list-ledgerTxs\n\tList all ledger-transaction associations\n";
+        echo "  list-audit [--txId=] [--operate=]\n\tList audit logs\n";
     }
 }
