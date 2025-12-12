@@ -45,25 +45,66 @@ class LedgerManager
      * 指定された期間の収支を集計する
      *
      * @param string $period 集計する期間（例: '2023-09'）
+     * @param string|null $toPeriod 終了期間（省略可能）
      * @return array 収入、支出、収支の配列
      */
-    public function summary(string $period): array
+    public function summary(string $period, ?string $toPeriod = null): array
     {
-        $ledger = $this->repo->fetchLedgerByPeriod($period);
-        if (empty($ledger)) {
-            return [
-                'income' => 0,
-                'expense' => 0,
-                'balance' => 0
-            ];
+        if ($toPeriod === null) {
+            $toPeriod = $period;
         }
 
-        return [
-            'income' => $ledger->getTotalIncome(),
-            'expense' => $ledger->getTotalExpense(),
-            'balance' => $ledger->getBalance(),
-            'incomeByCategories' => $ledger->getIncomeByCategories(),
-            'expenseByCategories' => $ledger->getExpenseByCategories()
+        if (!Validator::validateDateInYM($period) || !Validator::validateDateInYM($toPeriod)) {
+            throw new \InvalidArgumentException('Invalid period format.');
+        }
+
+        $dateTimePeriod = new \DateTimeImmutable($period);
+        $dateTimeToPeriod = new \DateTimeImmutable($toPeriod);
+
+        if ($dateTimePeriod > $dateTimeToPeriod) {
+            throw new \InvalidArgumentException('Invalid period range.');
+        }
+
+        $interval = $dateTimePeriod->diff($dateTimeToPeriod);
+        $monthlyTotals = ($interval->y * 12) + $interval->m + 1;
+
+        $ledgerData = [
+            'income' => 0,
+            'expense' => 0,
+            'balance' => 0,
+            'incomeByCategories' => [],
+            'expenseByCategories' => []
         ];
+
+        while ($monthlyTotals > 0) {
+            $ledger = $this->repo->fetchLedgerByPeriod($period);
+
+            if (!empty($ledger) && $ledger !== null) {
+                $ledgerData['income'] += $ledger->getTotalIncome();
+                $ledgerData['expense'] += $ledger->getTotalExpense();
+                $ledgerData['balance'] += $ledger->getBalance();
+
+                foreach ($ledger->getIncomeByCategories() as $category => $amount) {
+                    if (!isset($ledgerData['incomeByCategories'][$category])) {
+                        $ledgerData['incomeByCategories'][$category] = 0;
+                    }
+                    $ledgerData['incomeByCategories'][$category] += $amount;
+                }
+
+                foreach ($ledger->getExpenseByCategories() as $category => $amount) {
+                    if (!isset($ledgerData['expenseByCategories'][$category])) {
+                        $ledgerData['expenseByCategories'][$category] = 0;
+                    }
+                    $ledgerData['expenseByCategories'][$category] += $amount;
+                }
+            }
+
+            $nextMonth = (new \DateTimeImmutable($period))->modify('+1 month');
+            $nextPeriod = $nextMonth->format('Y-m');
+            $period = $nextPeriod;
+            $monthlyTotals--;
+        }
+
+        return $ledgerData;
     }
 }

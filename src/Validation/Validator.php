@@ -36,6 +36,21 @@ class Validator
         return $date->format('Y-m-d') === $value;
     }
 
+
+    /**
+     * 日付が 'Y-m' 形式であること、有効な日付であることを検証する
+     *
+     * @param mixed $value 検証する値
+     * @return bool 'Y-m' 形式であれば true、そうでなければ false
+     */
+    public static function validateDateInYM($value): bool
+    {
+        $date = \DateTimeImmutable::createFromFormat('Y-m', $value);
+        if ($date === false) return false;
+        return $date->format('Y-m') === $value;
+    }
+
+
     /**
      * 取引IDが正の整数であることを検証する
      *

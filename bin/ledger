@@ -4,11 +4,13 @@
 require_once __DIR__ . '/../vendor/autoload.php';
 
 use App\Console\Application;
+use App\Utility\LogRotator;
 
 // 設定ファイルからDBパスを取得
 $config = require(__DIR__ . '/../config/config.php');
 $dbPath = $config['sqlite_path'];
 $logPath = $config['log_path'];
+$logMaxSize = $config['log_max_size'];
 
 // コマンドライン引数を渡してアプリケーションを起動
 $app = new Application($dbPath);
@@ -22,7 +24,7 @@ try {
     // ログに詳細を残す
     $logFile = $logPath;
     $msg = sprintf("[%s] %s: %s in %s:%d\nStack trace:\n%s\n\n", date('c'), get_class($e), $e->getMessage(), $e->getFile(), $e->getLine(), $e->getTraceAsString());
-    error_log($msg, 3, $logFile);
+    LogRotator::safeWrite($msg, $logFile, $logMaxSize);
     exit(1);
 
 } catch (\Throwable $e) {
@@ -31,6 +33,6 @@ try {
     // ログに詳細を残す
     $logFile = $logPath;
     $msg = sprintf("[%s] %s: %s in %s:%d\nStack trace:\n%s\n\n", date('c'), get_class($e), $e->getMessage(), $e->getFile(), $e->getLine(), $e->getTraceAsString());
-    error_log($msg, 3, $logFile);
+    LogRotator::safeWrite($msg, $logFile, $logMaxSize);
     exit(2);
 }
