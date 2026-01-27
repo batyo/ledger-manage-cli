@@ -3,6 +3,7 @@ namespace App\Console;
 
 use App\Entity\LedgerEnrtry;
 use App\Entity\LedgerTxEntry;
+use App\Entity\TransactionEntry;
 use App\Service\LedgerManager;
 use App\Service\TransactionManager;
 use App\Service\AccountManager;
@@ -149,6 +150,11 @@ class Application
             $transactionType,
             $note
         );
+
+        if (!$this->confirmTxData($entry)) {
+            echo "Transaction registration cancelled.\n";
+            return;
+        }
 
         $manager->registerTxWithAccount($entry);
         echo "Transaction added.\n";
@@ -873,5 +879,45 @@ class Application
         echo "  list-categories\n\tList all categories\n";
         echo "  list-ledgerTxs\n\tList all ledger-transaction associations\n";
         echo "  list-audit [--txId=] [--operate=]\n\tList audit logs\n";
+    }
+
+    /**
+     * 確認プロンプト
+     *
+     * - 単一取引（accountId, transactionType != 3）に対応
+     *
+     * @param TransactionEntry $entry 登録予定の取引データ。以下のプロパティを持つ
+     *    - date: \DateTimeImmutable
+     *    - amount: float
+     *    - categoryId: int|null
+     *    - accountId: int|null
+     *    - transactionType: int
+     *    - note: ?string
+     * @return bool
+     */
+    private function confirmTxData(TransactionEntry $entry): bool
+    {
+        $catMap = $this->categoryManager->getCategoryMap();
+        $accMap = $this->accountManager->getAccountMap();
+        $categoryName = $catMap[$entry->categoryId] ?? (string)$entry->categoryId;
+        $accountName = $accMap[$entry->accountId] ?? (string)$entry->accountId;
+        $txTypeName = $this->transactionManager->getTxType($entry);
+
+        $date = $entry->date->format('Y-m-d');
+        $amount = $entry->amount;
+        echo "登録内容を確認してください:\n";
+        echo "  日付: {$date}\n";
+        echo "  金額: ¥{$amount}\n";
+        echo "  カテゴリ: {$categoryName} ({$entry->categoryId})\n";
+        echo "  アカウント: {$accountName} ({$entry->accountId})\n";
+        echo "  取引タイプ: {$txTypeName} ({$entry->transactionType})\n";
+        echo "  メモ: " . ($entry->note ?? '') . "\n";
+        echo "登録しますか？ (y/n): ";
+
+        $handle = fopen("php://stdin", "r");
+        $line = $handle === false ? '' : fgets($handle);
+        $answer = trim((string)$line);
+
+        return in_array(strtolower($answer), ['y','yes'], true);
     }
 }
