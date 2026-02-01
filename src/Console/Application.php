@@ -3,6 +3,7 @@ namespace App\Console;
 
 use App\Entity\LedgerEnrtry;
 use App\Entity\LedgerTxEntry;
+use App\Entity\TransactionEntry;
 use App\Service\LedgerManager;
 use App\Service\TransactionManager;
 use App\Service\AccountManager;
@@ -24,7 +25,7 @@ class Application
     private LedgerTxManager $ledgerTxManager;
     private TxAuditManager $txAuditManager;
     
-    public function __construct(private string $dbPath)
+    public function __construct(private string $dbPath, private array $userPrefs)
     {
         $repo = new SqliteRepository($this->dbPath);
         $this->ledgerManager = new LedgerManager($repo);
@@ -150,6 +151,11 @@ class Application
             $note
         );
 
+        if (!$this->confirmTxData($entry)) {
+            echo "Transaction registration cancelled.\n";
+            return;
+        }
+
         $manager->registerTxWithAccount($entry);
         echo "Transaction added.\n";
     }
@@ -159,14 +165,14 @@ class Application
      * 新しい振替取引を追加する
      *
      * Usage:
-     *   bin/ledger transfer [date] [amount] [fromAccountId] [toAccountId] [categoryId?] [note?]
+     *   bin/ledger transfer [date] [amount] [fromAccountId] [toAccountId] [note?] [categoryId?]
      *
      *  - date: YYYY-MM-DD (省略時は今日)
      *  - amount: 数値
      *  - fromAccountId: 振替元アカウントID
      *  - toAccountId: 振替先アカウントID
-     *  - categoryId: (任意) transfer タイプのカテゴリID。省略時は登録済みの transfer カテゴリを自動検出。
      *  - note: (任意) メモ文字列
+     *  - categoryId: (任意) transfer タイプのカテゴリID。省略時は登録済みの transfer カテゴリを自動検出。
      *
      * @param array $argv
      * @param TransactionManager $manager
@@ -185,11 +191,52 @@ class Application
         $amount = (float)$args[1];
         $from = (int)$args[2];
         $to = (int)$args[3];
-        $categoryId = isset($args[4]) ? (int)$args[4] : null;
-        $note = $args[5] ?? null;
+        $note = $args[4] ?? null;
+        $categoryId = isset($args[5]) ? (int)$args[5] : null;
+
+        // categoryId が指定されなかった場合、transfer タイプのカテゴリを user_prefs.php から取得
+        if ($categoryId === null) {
+            $pref = $this->userPrefs['transfer_category_id'] ?? null;
+            if ($pref !== null) {
+                $categoryId = (int)$pref;
+                $cat = $this->categoryManager->findCategoryById($categoryId);
+                if ($cat === null) {
+                    throw new \InvalidArgumentException("Preferred transfer category id={$categoryId} not found. Please update your config/user_prefs.php or pass categoryId explicitly.");
+                }
+                echo "Using preferred transfer category id={$categoryId}\n";
+            }
+        }
 
         if ($amount === null || $from === null || $to === null) {
-            throw new \InvalidArgumentException('Usage: transfer [date] [amount] [fromAccountId] [toAccountId] [categoryId?] [note?]');
+            throw new \InvalidArgumentException('Usage: transfer [date] [amount] [fromAccountId] [toAccountId] [note?] [categoryId?]');
+        }
+
+        // 登録内容の確認
+        $accMap = $this->accountManager->getAccountMap();
+        $fromName = $accMap[$from] ?? (string)$from;
+        $toName = $accMap[$to] ?? (string)$to;
+
+        echo "登録内容を確認してください:\n";
+        echo "  日付: {$date->format('Y-m-d')}\n";
+        echo "  金額: ¥{$amount}\n";
+        echo "  振替元: {$fromName} ({$from})\n";
+        echo "  振替先: {$toName} ({$to})\n";
+        if ($categoryId !== null) {
+            $catMap = $this->categoryManager->getCategoryMap();
+            $catName = $catMap[$categoryId] ?? (string)$categoryId;
+            echo "  カテゴリ: {$catName} ({$categoryId})\n";
+        } else {
+            echo "  カテゴリ: (未指定)\n";
+        }
+        echo "  メモ: " . ($note !== null ? $note : '(なし)') . "\n";
+        echo "登録しますか？ (y/n): ";
+
+        $handle = fopen("php://stdin", "r");
+        $line = $handle === false ? '' : fgets($handle);
+        $answer = strtolower(trim((string)$line));
+        if ($answer !== 'y' && $answer !== 'yes') {
+            echo "Transfer cancelled.\n";
+            return;
         }
 
         [$fromTxId, $toTxId] = $manager->registerTransfer($date, $amount, $from, $to, $categoryId, $note);
@@ -855,23 +902,63 @@ class Application
     {
         echo "Usage: php app.php [command] [options]\n";
         echo "Commands:\n";
-        echo "  init-db                     Initialize the database\n";
-        echo "  add-tx [date] [amount] [categoryId] [accountId] [transactionType] [note]  Add a new transaction\n";
-        echo "  update-tx [--field ...] [ID] [values ...]  Update fields of a transaction\n";
-        echo "  delete-tx [ID]              Delete a transaction\n";
-        echo "  list-txs           List all transactions\n";
-        echo "  download-txs-csv [period] [outputPath?]  Download transactions as CSV for the given period\n";
-        echo "  transfer [date] [amount] [fromAccountId] [toAccountId] [categoryId?] [note?]  Add a transfer transaction\n";
-        echo "  add-ledger [period]        Add a new ledger for the given period (e.g., '2023-09')\n";
-        echo "  summary [period]            Show summary for a given period (e.g., '2023-09')\n";
-        echo "  add-account [name] [type] [balance]  Add a new account\n";
-        echo "  update-account [--field ...] [ID] [values ...]  Update fields of an account\n";
-        echo "  list-accounts              List all accounts\n";
-        echo "  add-category [name] [type]  Add a new category (type: 1 for INCOME, 2 for EXPENSE)\n";
-        echo "  update-category [--field ...] [ID] [values ...]  Update fields of a category\n";
-        echo "  delete-category [--reassign] [--force] [ID] [reassignID]  Delete a category\n";
-        echo "  list-categories             List all categories\n";
-        echo "  list-ledgerTxs              List all ledger-transaction associations\n";
-        echo "  list-audit [--txId=] [--operate=]  List audit logs\n";
+        echo "  init-db\n\tInitialize the database\n";
+        echo "  add-tx [date] [amount] [categoryId] [accountId] [transactionType] [note]\n\tAdd a new transaction\n";
+        echo "  update-tx [--field ...] [ID] [values ...]\n\tUpdate fields of a transaction\n";
+        echo "  delete-tx [ID]\n\tDelete a transaction\n";
+        echo "  list-txs\n\tList all transactions\n";
+        echo "  download-txs-csv [period] [outputPath?]\n\tDownload transactions as CSV for the given period\n";
+        echo "  transfer [date] [amount] [fromAccountId] [toAccountId] [categoryId?] [note?]\n\tAdd a transfer transaction\n";
+        echo "  add-ledger [period]\n\tAdd a new ledger for the given period (e.g., '2023-09')\n";
+        echo "  summary [fromPeriod] [toPeriod?]\n\tShow summary for a given period (e.g., '2023-09')\n";
+        echo "  add-account [name] [type] [balance]\n\tAdd a new account\n";
+        echo "  update-account [--field ...] [ID] [values ...]\n\tUpdate fields of an account\n";
+        echo "  list-accounts\n\tList all accounts\n";
+        echo "  add-category [name] [type]\n\tAdd a new category (type: 1 for INCOME, 2 for EXPENSE)\n";
+        echo "  update-category [--field ...] [ID] [values ...]\n\tUpdate fields of a category\n";
+        echo "  delete-category [--reassign] [--force] [ID] [reassignID]\n\tDelete a category\n";
+        echo "  list-categories\n\tList all categories\n";
+        echo "  list-ledgerTxs\n\tList all ledger-transaction associations\n";
+        echo "  list-audit [--txId=] [--operate=]\n\tList audit logs\n";
+    }
+
+    /**
+     * 確認プロンプト
+     *
+     * - 単一取引（accountId, transactionType != 3）に対応
+     *
+     * @param TransactionEntry $entry 登録予定の取引データ。以下のプロパティを持つ
+     *    - date: \DateTimeImmutable
+     *    - amount: float
+     *    - categoryId: int|null
+     *    - accountId: int|null
+     *    - transactionType: int
+     *    - note: ?string
+     * @return bool
+     */
+    private function confirmTxData(TransactionEntry $entry): bool
+    {
+        $catMap = $this->categoryManager->getCategoryMap();
+        $accMap = $this->accountManager->getAccountMap();
+        $categoryName = $catMap[$entry->categoryId] ?? (string)$entry->categoryId;
+        $accountName = $accMap[$entry->accountId] ?? (string)$entry->accountId;
+        $txTypeName = $this->transactionManager->getTxType($entry);
+
+        $date = $entry->date->format('Y-m-d');
+        $amount = $entry->amount;
+        echo "登録内容を確認してください:\n";
+        echo "  日付: {$date}\n";
+        echo "  金額: ¥{$amount}\n";
+        echo "  カテゴリ: {$categoryName} ({$entry->categoryId})\n";
+        echo "  アカウント: {$accountName} ({$entry->accountId})\n";
+        echo "  取引タイプ: {$txTypeName} ({$entry->transactionType})\n";
+        echo "  メモ: " . ($entry->note ?? '') . "\n";
+        echo "登録しますか？ (y/n): ";
+
+        $handle = fopen("php://stdin", "r");
+        $line = $handle === false ? '' : fgets($handle);
+        $answer = trim((string)$line);
+
+        return in_array(strtolower($answer), ['y','yes'], true);
     }
 }

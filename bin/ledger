@@ -12,8 +12,11 @@ $dbPath = $config['sqlite_path'];
 $logPath = $config['log_path'];
 $logMaxSize = $config['log_max_size'];
 
+$userPrefsFile = __DIR__ . '/../config/user_prefs.php';
+$userPrefs = file_exists($userPrefsFile) ? require $userPrefsFile : [];
+
 // コマンドライン引数を渡してアプリケーションを起動
-$app = new Application($dbPath);
+$app = new Application($dbPath, $userPrefs);
 
 try {
     $app->run($argv);
