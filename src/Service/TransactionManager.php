@@ -104,12 +104,12 @@ class TransactionManager
             throw new \InvalidArgumentException('The transfer origin and transfer destination cannot be the same account.');
         }
 
-        if (!isset($args[4])) return;
+        if (!isset($args[5])) return;
 
-        if (!Validator::validateCategoryId($args[4])) {
+        if (!Validator::validateCategoryId($args[5])) {
             throw new \InvalidArgumentException('The category ID must be a positive integer.');
         }
-        $categoryEntry = $this->repo->fetchCategoryById($args[4]);
+        $categoryEntry = $this->repo->fetchCategoryById($args[5]);
         if ($categoryEntry === null) {
             throw new \InvalidArgumentException('Category not found.');
         }

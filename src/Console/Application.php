@@ -25,7 +25,7 @@ class Application
     private LedgerTxManager $ledgerTxManager;
     private TxAuditManager $txAuditManager;
     
-    public function __construct(private string $dbPath)
+    public function __construct(private string $dbPath, private array $userPrefs)
     {
         $repo = new SqliteRepository($this->dbPath);
         $this->ledgerManager = new LedgerManager($repo);
@@ -165,14 +165,14 @@ class Application
      * 新しい振替取引を追加する
      *
      * Usage:
-     *   bin/ledger transfer [date] [amount] [fromAccountId] [toAccountId] [categoryId?] [note?]
+     *   bin/ledger transfer [date] [amount] [fromAccountId] [toAccountId] [note?] [categoryId?]
      *
      *  - date: YYYY-MM-DD (省略時は今日)
      *  - amount: 数値
      *  - fromAccountId: 振替元アカウントID
      *  - toAccountId: 振替先アカウントID
-     *  - categoryId: (任意) transfer タイプのカテゴリID。省略時は登録済みの transfer カテゴリを自動検出。
      *  - note: (任意) メモ文字列
+     *  - categoryId: (任意) transfer タイプのカテゴリID。省略時は登録済みの transfer カテゴリを自動検出。
      *
      * @param array $argv
      * @param TransactionManager $manager
@@ -191,11 +191,52 @@ class Application
         $amount = (float)$args[1];
         $from = (int)$args[2];
         $to = (int)$args[3];
-        $categoryId = isset($args[4]) ? (int)$args[4] : null;
-        $note = $args[5] ?? null;
+        $note = $args[4] ?? null;
+        $categoryId = isset($args[5]) ? (int)$args[5] : null;
+
+        // categoryId が指定されなかった場合、transfer タイプのカテゴリを user_prefs.php から取得
+        if ($categoryId === null) {
+            $pref = $this->userPrefs['transfer_category_id'] ?? null;
+            if ($pref !== null) {
+                $categoryId = (int)$pref;
+                $cat = $this->categoryManager->findCategoryById($categoryId);
+                if ($cat === null) {
+                    throw new \InvalidArgumentException("Preferred transfer category id={$categoryId} not found. Please update your config/user_prefs.php or pass categoryId explicitly.");
+                }
+                echo "Using preferred transfer category id={$categoryId}\n";
+            }
+        }
 
         if ($amount === null || $from === null || $to === null) {
-            throw new \InvalidArgumentException('Usage: transfer [date] [amount] [fromAccountId] [toAccountId] [categoryId?] [note?]');
+            throw new \InvalidArgumentException('Usage: transfer [date] [amount] [fromAccountId] [toAccountId] [note?] [categoryId?]');
+        }
+
+        // 登録内容の確認
+        $accMap = $this->accountManager->getAccountMap();
+        $fromName = $accMap[$from] ?? (string)$from;
+        $toName = $accMap[$to] ?? (string)$to;
+
+        echo "登録内容を確認してください:\n";
+        echo "  日付: {$date->format('Y-m-d')}\n";
+        echo "  金額: ¥{$amount}\n";
+        echo "  振替元: {$fromName} ({$from})\n";
+        echo "  振替先: {$toName} ({$to})\n";
+        if ($categoryId !== null) {
+            $catMap = $this->categoryManager->getCategoryMap();
+            $catName = $catMap[$categoryId] ?? (string)$categoryId;
+            echo "  カテゴリ: {$catName} ({$categoryId})\n";
+        } else {
+            echo "  カテゴリ: (未指定)\n";
+        }
+        echo "  メモ: " . ($note !== null ? $note : '(なし)') . "\n";
+        echo "登録しますか？ (y/n): ";
+
+        $handle = fopen("php://stdin", "r");
+        $line = $handle === false ? '' : fgets($handle);
+        $answer = strtolower(trim((string)$line));
+        if ($answer !== 'y' && $answer !== 'yes') {
+            echo "Transfer cancelled.\n";
+            return;
         }
 
         [$fromTxId, $toTxId] = $manager->registerTransfer($date, $amount, $from, $to, $categoryId, $note);
