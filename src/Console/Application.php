@@ -1119,6 +1119,8 @@ class Application
         echo "  list-categories\n\tList all categories\n";
         echo "  list-ledgerTxs\n\tList all ledger-transaction associations\n";
         echo "  add-tx-tmp [name] [amount] [categoryId] [accountId] [transactionType] [note?]\n\tAdd a new transaction template\n";
+        echo "  update-tx-tmp [ID] [--name=...] [--amount=...] [--category=...] [--account=...] [--type=...] [--note=...]\n\tUpdate a transaction template\n";
+        echo "  delete-tx-tmp [ID]\n\tDelete a transaction template\n";
         echo "  list-tx-tmp\n\tList all transaction templates\n";
         echo "  list-audit [--txId=] [--operate=]\n\tList audit logs\n";
     }
