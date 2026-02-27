@@ -7,6 +7,7 @@ use App\Entity\CategoryEntry;
 use App\Entity\AccountEntry;
 use App\Entity\LedgerEnrtry;
 use App\Entity\LedgerTxEntry;
+use App\Entity\TxTemplateEntry;
 use PDO;
 
 /**
@@ -246,6 +247,79 @@ class SqliteRepository implements RepositoryInterface
         $stmt = $this->pdo->prepare('INSERT INTO transfer_groups DEFAULT VALUES');
         $stmt->execute();
         return (int)$this->pdo->lastInsertId();
+    }
+
+
+    /** Templates */
+
+
+    /**
+     * テンプレートを挿入する
+     *
+     * @param TxTemplateEntry $entry
+     */
+    public function insertTemplate(TxTemplateEntry $entry): void
+    {
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO transaction_templates (name, amount, category_id, account_id, transaction_type, note) VALUES (?, ?, ?, ?, ?, ?)'
+        );
+        $stmt->execute([
+            $entry->name,
+            $entry->amount,
+            $entry->categoryId,
+            $entry->accountId,
+            $entry->transactionType,
+            $entry->note
+        ]);
+    }
+
+
+    /**
+     * 名前でテンプレートを取得する
+     *
+     * @param string $name テンプレート名
+     * @return TxTemplateEntry|null テンプレートエントリ、存在しない場合は null
+    */
+    public function fetchTemplateByName(string $name): ?TxTemplateEntry
+    {
+        $stmt = $this->pdo->prepare('SELECT * FROM transaction_templates WHERE name = ?');
+        $stmt->execute([$name]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$row) return null;
+        return new TxTemplateEntry(
+            (int)$row['id'],
+            (string)$row['name'],
+            (float)$row['amount'],
+            (int)$row['category_id'],
+            (int)$row['account_id'],
+            (int)$row['transaction_type'],
+            $row['note'] ?? null
+        );
+    }
+
+
+    /**
+     * 全てのテンプレートを取得する
+     *
+     * @return TxTemplateEntry[] テンプレートエントリの配列
+     */
+    public function fetchAllTemplates(): array
+    {
+        $stmt = $this->pdo->query('SELECT * FROM transaction_templates');
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $result = [];
+        foreach ($rows as $row) {
+            $result[] = new TxTemplateEntry(
+                (int)$row['id'],
+                (string)$row['name'],
+                (float)$row['amount'],
+                (int)$row['category_id'],
+                (int)$row['account_id'],
+                (int)$row['transaction_type'],
+                $row['note'] ?? null
+            );
+        }
+        return $result;
     }
 
 

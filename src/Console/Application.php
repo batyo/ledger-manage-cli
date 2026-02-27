@@ -11,6 +11,7 @@ use App\Service\CategoryManager;
 use App\Repository\SqliteRepository;
 use App\Service\LedgerTxManager;
 use App\Service\TxAuditManager;
+use App\Service\TxTemplateManager;
 use App\Validation\Validator;
 
 /**
@@ -24,6 +25,7 @@ class Application
     private CategoryManager $categoryManager;
     private LedgerTxManager $ledgerTxManager;
     private TxAuditManager $txAuditManager;
+    private TxTemplateManager $txTemplateManager;
     
     public function __construct(private string $dbPath, private array $userPrefs)
     {
@@ -34,6 +36,7 @@ class Application
         $this->categoryManager = new CategoryManager($repo);
         $this->ledgerTxManager = new LedgerTxManager($repo);
         $this->txAuditManager = new TxAuditManager($repo);
+        $this->txTemplateManager = new TxTemplateManager($repo);
     }
 
     /**
@@ -50,7 +53,7 @@ class Application
                 $this->initDb();
                 break;
             case 'add-tx':
-                $this->executeAddTransaction($argv, $this->transactionManager);
+                $this->executeAddTransaction($argv, $this->transactionManager, $this->txTemplateManager);
                 break;
             case 'transfer':
                 $this->executeTransfer($argv, $this->transactionManager);
@@ -97,6 +100,12 @@ class Application
             case 'list-ledgerTxs':
                 $this->listLedgerTxs($this->ledgerTxManager);
                 break;
+            case 'add-tx-tmp':
+                $this->executeAddTxTemplate($argv, $this->txTemplateManager);
+                break;
+            case 'list-tx-tmp':
+                $this->listTxTemplates($this->txTemplateManager);
+                break;
             case 'list-audit':
                 $this->listAudit($argv, $this->txAuditManager);
                 break;
@@ -124,10 +133,35 @@ class Application
      * 
      * @param array $argv コマンドライン引数の配列
      * @param TransactionManager $manager 取引管理サービス
+     * @param TxTemplateManager $tmpManager テンプレート管理サービス
      */
-    private function executeAddTransaction(array $argv, TransactionManager $manager): void
+    private function executeAddTransaction(array $argv, TransactionManager $manager, TxTemplateManager $tmpManager): void
     {
         $args = array_slice($argv, 2);
+        if (count($args) < 1) {
+            throw new \InvalidArgumentException('Not enough arguments. Usage: add-transaction [date] [amount] [categoryId] [accountId] [transactionType] [note?] or add-tx [date] --tmp templateName');
+        }
+
+        // テンプレートから取引を追加する場合の処理
+        if (isset($args[1]) && $args[1] === '--tmp') {
+            $templateName = $args[2] ?? null;
+            if ($templateName === null) {
+                throw new \InvalidArgumentException('Please specify the template name.');
+            }
+            $date = new \DateTimeImmutable($args[0]);
+            $entry = $tmpManager->buildTxFromTemplate($templateName, $date);
+
+            if (!$this->confirmTxData($entry)) {
+                echo "Transaction registration cancelled.\n";
+                return;
+            }
+            
+            $manager->registerTxWithAccount($entry);
+            echo "Transaction added from template '{$templateName}'.\n";
+            return;
+        }
+
+        // 通常の取引追加の処理
         if (count($args) < 4) {
             throw new \InvalidArgumentException('Not enough arguments. Usage: add-transaction [date] [amount] [categoryId] [accountId] [transactionType] [note?]');
         }
@@ -854,6 +888,71 @@ class Application
 
 
     /**
+     * 新しい取引テンプレートを追加する
+     *
+     * Usage:
+     *   bin/ledger add-tx-tmp [name] [amount] [categoryId] [accountId] [transactionType] [note?]
+     *
+     *  - name: テンプレート名
+     *  - amount: 金額
+     *  - categoryId: カテゴリID
+     *  - accountId: アカウントID
+     *  - transactionType: 取引タイプ（1=INCOME, 2=EXPENSE, 3=TRANSFER）
+     *  - note: (任意) メモ文字列
+     *
+     * @param array $argv
+     * @param TxTemplateManager $manager
+     */
+    private function executeAddTxTemplate(array $argv, TxTemplateManager $manager): void
+    {
+        $args = array_slice($argv, 2);
+        if (count($args) < 5) {
+            throw new \InvalidArgumentException('Not enough arguments. Usage: add-tx-tmp [name] [amount] [categoryId] [accountId] [transactionType] [note?]');
+        }
+
+        $name = $args[0];
+        $amount = (float)$args[1];
+        $categoryId = (int)$args[2];
+        $accountId = (int)$args[3];
+        $transactionType = (int)$args[4];
+        $note = $args[5] ?? null;
+
+        $entry = new \App\Entity\TxTemplateEntry(
+            null,
+            $name,
+            $amount,
+            $categoryId,
+            $accountId,
+            $transactionType,
+            $note
+        );
+
+        $manager->validateTxTemplate($entry);
+        $manager->registerTxTemplate($entry);
+        echo "Transaction template '{$name}' added.\n";
+    }
+
+
+    /**
+     * 全ての取引テンプレートを表示する
+     *
+     * @param TxTemplateManager $manager
+     */
+    private function listTxTemplates(TxTemplateManager $manager): void
+    {
+        $templates = $manager->findAllTemplates();
+        if (empty($templates)) {
+            echo "No transaction template.\n";
+            return;
+        }
+
+        foreach ($templates as $tmp) {
+            echo "{$tmp->id} {$tmp->name} categoryId:{$tmp->categoryId} accountId:{$tmp->accountId} type:{$tmp->transactionType} note:{$tmp->note}\n";
+        }
+    }
+
+
+    /**
      * 監査ログを表示する
      *
      * @param array $argv
@@ -919,6 +1018,8 @@ class Application
         echo "  delete-category [--reassign] [--force] [ID] [reassignID]\n\tDelete a category\n";
         echo "  list-categories\n\tList all categories\n";
         echo "  list-ledgerTxs\n\tList all ledger-transaction associations\n";
+        echo "  add-tx-tmp [name] [amount] [categoryId] [accountId] [transactionType] [note?]\n\tAdd a new transaction template\n";
+        echo "  list-tx-tmp\n\tList all transaction templates\n";
         echo "  list-audit [--txId=] [--operate=]\n\tList audit logs\n";
     }
 
