@@ -103,6 +103,12 @@ class Application
             case 'add-tx-tmp':
                 $this->executeAddTxTemplate($argv, $this->txTemplateManager);
                 break;
+            case 'update-tx-tmp':
+                $this->executeUpdateTxTemplate($argv, $this->txTemplateManager);
+                break;
+            case 'delete-tx-tmp':
+                $this->executeDeleteTxTemplate($argv, $this->txTemplateManager);
+                break;
             case 'list-tx-tmp':
                 $this->listTxTemplates($this->txTemplateManager);
                 break;
@@ -930,6 +936,100 @@ class Application
         $manager->validateTxTemplate($entry);
         $manager->registerTxTemplate($entry);
         echo "Transaction template '{$name}' added.\n";
+    }
+
+
+    /**
+     * テンプレートを更新する
+     *
+     * Usage:
+     *   bin/ledger update-tx-tmp [ID] [--name=...] [--amount=...] [--category=...] [--account=...] [--type=...] [--note=...]
+     *
+     * @param array $argv
+     * @param TxTemplateManager $manager
+     */
+    private function executeUpdateTxTemplate(array $argv, TxTemplateManager $manager): void
+    {
+        $args = array_slice($argv, 2);
+        if (empty($args)) {
+            throw new \InvalidArgumentException('Please specify ID and options. Usage: update-tx-tmp [ID] [--name=...] [--amount=...] [--category=...] [--account=...] [--type=...] [--note=...]');
+        }
+
+        // ID を先頭で指定
+        $idToken = $args[0];
+        if (!is_numeric($idToken) || (int)$idToken <= 0) {
+            throw new \InvalidArgumentException('Please specify the template id as a positive integer.');
+        }
+        $id = (int)$idToken;
+
+        // 残りの引数をフラグとして解析 (--key=value または --key value)
+        $rest = array_slice($args, 1);
+        $updates = [];
+        $flagsWithoutValue = [];
+        $i = 0;
+        $n = count($rest);
+
+        while ($i < $n && str_starts_with($rest[$i], '--')) {
+            $arg = $rest[$i++];
+            $pair = substr($arg, 2);
+            if ($pair === '') continue;
+            if (str_contains($pair, '=')) {
+                [$k, $v] = array_pad(explode('=', $pair, 2), 2, null);
+                $updates[$k] = $v;
+            } else {
+                $flagsWithoutValue[] = $pair;
+            }
+        }
+
+        // 位置引数から flagsWithoutValue に対応する値を取得
+        $posValues = array_slice($rest, $i);
+        if (count($posValues) !== count($flagsWithoutValue)) {
+            throw new \InvalidArgumentException('The number of flags without "=" does not match the number of supplied values.');
+        }
+        foreach ($flagsWithoutValue as $idx => $key) {
+            $updates[$key] = $posValues[$idx];
+        }
+
+        // 現行テンプレート取得
+        $curr = $manager->findTemplateById($id);
+        if ($curr === null) {
+            throw new \InvalidArgumentException("Template id={$id} not found.");
+        }
+
+        // マージ（許可キー: name, amount, category, account, type, note）
+        $name = $updates['name'] ?? $curr->name;
+        $amount = isset($updates['amount']) ? (float)$updates['amount'] : $curr->amount;
+        $categoryId = isset($updates['category']) ? (int)$updates['category'] : $curr->categoryId;
+        $accountId = isset($updates['account']) ? (int)$updates['account'] : $curr->accountId;
+        $transactionType = isset($updates['type']) ? (int)$updates['type'] : $curr->transactionType;
+        $note = array_key_exists('note', $updates) ? $updates['note'] : $curr->note;
+
+        $entry = new \App\Entity\TxTemplateEntry($id, $name, $amount, $categoryId, $accountId, $transactionType, $note);
+
+        $manager->validateTxTemplate($entry);
+        $manager->updateTxTemplate($entry);
+        echo "Transaction template id={$id} updated.\n";
+    }
+
+
+    /**
+     * テンプレートを削除する
+     *
+     * Usage:
+     *   bin/ledger delete-tx-tmp [id]
+     *
+     * @param array $argv
+     * @param TxTemplateManager $manager
+     */
+    private function executeDeleteTxTemplate(array $argv, TxTemplateManager $manager): void
+    {
+        $id = isset($argv[2]) ? (int)$argv[2] : null;
+        if ($id === null || $id <= 0) {
+            throw new \InvalidArgumentException('Please specify the template id as a positive integer.');
+        }
+
+        $manager->deleteTxTemplate($id);
+        echo "Transaction template id={$id} deleted.\n";
     }
 
 

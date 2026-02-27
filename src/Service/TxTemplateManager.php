@@ -52,6 +52,53 @@ class TxTemplateManager
 
 
     /**
+     * IDでテンプレートを取得する
+     *
+     * @param int $id
+     * @return TxTemplateEntry|null
+     */
+    public function findTemplateById(int $id): ?TxTemplateEntry
+    {
+        return $this->repo->fetchTemplateById($id);
+    }
+
+
+    /**
+     * テンプレートを更新する
+     *
+     * @param TxTemplateEntry $entry
+     */
+    public function updateTxTemplate(TxTemplateEntry $entry): void
+    {
+        if ($entry->id === null) {
+            throw new \InvalidArgumentException('Template ID is required for update.');
+        }
+        $curr = $this->repo->fetchTemplateById($entry->id);
+        if ($curr === null) {
+            throw new \InvalidArgumentException("Template id={$entry->id} not found.");
+        }
+
+        $this->validateTxTemplate($entry);
+        $this->repo->updateTemplate($entry);
+    }
+
+
+    /**
+     * テンプレートを削除する
+     *
+     * @param int $id
+     */
+    public function deleteTxTemplate(int $id): void
+    {
+        $entry = $this->repo->fetchTemplateById($id);
+        if ($entry === null) {
+            throw new \InvalidArgumentException("Template id={$id} not found.");
+        }
+        $this->repo->deleteTemplate($entry);
+    }
+
+
+    /**
      * テンプレートの内容を検証する
      *
      * @param TxTemplateEntry $entry 検証するテンプレートエントリ

@@ -93,6 +93,31 @@ interface RepositoryInterface
 
 
     /**
+     * IDでテンプレートを取得する
+     *
+     * @param int $id
+     * @return TxTemplateEntry|null
+     */
+    public function fetchTemplateById(int $id): ?TxTemplateEntry;
+
+
+    /**
+     * テンプレートを更新する
+     *
+     * @param TxTemplateEntry $entry
+     */
+    public function updateTemplate(TxTemplateEntry $entry): void;
+
+
+    /**
+     * テンプレートを削除する
+     *
+     * @param TxTemplateEntry $entry
+     */
+    public function deleteTemplate(TxTemplateEntry $entry): void;
+
+
+    /**
      * 全てのテンプレートを取得する
      *
      * @return TxTemplateEntry[] テンプレートエントリの配列

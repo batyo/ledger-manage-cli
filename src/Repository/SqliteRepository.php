@@ -299,6 +299,70 @@ class SqliteRepository implements RepositoryInterface
 
 
     /**
+     * IDでテンプレートを取得する
+     *
+     * @param int $id
+     * @return TxTemplateEntry|null
+     */
+    public function fetchTemplateById(int $id): ?TxTemplateEntry
+    {
+        $stmt = $this->pdo->prepare('SELECT * FROM transaction_templates WHERE id = ?');
+        $stmt->execute([$id]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$row) return null;
+        return new TxTemplateEntry(
+            (int)$row['id'],
+            (string)$row['name'],
+            (float)$row['amount'],
+            (int)$row['category_id'],
+            (int)$row['account_id'],
+            (int)$row['transaction_type'],
+            $row['note'] ?? null
+        );
+    }
+
+
+    /**
+     * テンプレートを更新する
+     *
+     * @param TxTemplateEntry $entry
+     */
+    public function updateTemplate(TxTemplateEntry $entry): void
+    {
+        if ($entry->id === null) {
+            throw new \InvalidArgumentException('Template ID is required for update.');
+        }
+        $stmt = $this->pdo->prepare(
+            'UPDATE transaction_templates SET name = ?, amount = ?, category_id = ?, account_id = ?, transaction_type = ?, note = ? WHERE id = ?'
+        );
+        $stmt->execute([
+            $entry->name,
+            $entry->amount,
+            $entry->categoryId,
+            $entry->accountId,
+            $entry->transactionType,
+            $entry->note,
+            $entry->id
+        ]);
+    }
+
+
+    /**
+     * テンプレートを削除する
+     *
+     * @param TxTemplateEntry $entry
+     */
+    public function deleteTemplate(TxTemplateEntry $entry): void
+    {
+        if ($entry->id === null) {
+            throw new \InvalidArgumentException('Template ID is required for delete.');
+        }
+        $stmt = $this->pdo->prepare('DELETE FROM transaction_templates WHERE id = ?');
+        $stmt->execute([$entry->id]);
+    }
+
+
+    /**
      * 全てのテンプレートを取得する
      *
      * @return TxTemplateEntry[] テンプレートエントリの配列
