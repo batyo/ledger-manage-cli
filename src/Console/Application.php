@@ -1107,7 +1107,7 @@ class Application
         echo "  delete-tx [ID]\n\tDelete a transaction\n";
         echo "  list-txs\n\tList all transactions\n";
         echo "  download-txs-csv [period] [outputPath?]\n\tDownload transactions as CSV for the given period\n";
-        echo "  transfer [date] [amount] [fromAccountId] [toAccountId] [categoryId?] [note?]\n\tAdd a transfer transaction\n";
+        echo "  transfer [date] [amount] [fromAccountId] [toAccountId] [note?] [categoryId?]\n\tAdd a transfer transaction\n";
         echo "  add-ledger [period]\n\tAdd a new ledger for the given period (e.g., '2023-09')\n";
         echo "  summary [fromPeriod] [toPeriod?]\n\tShow summary for a given period (e.g., '2023-09')\n";
         echo "  add-account [name] [type] [balance]\n\tAdd a new account\n";
