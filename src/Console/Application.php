@@ -11,6 +11,7 @@ use App\Service\CategoryManager;
 use App\Repository\SqliteRepository;
 use App\Service\LedgerTxManager;
 use App\Service\TxAuditManager;
+use App\Service\TxTemplateManager;
 use App\Validation\Validator;
 
 /**
@@ -24,6 +25,7 @@ class Application
     private CategoryManager $categoryManager;
     private LedgerTxManager $ledgerTxManager;
     private TxAuditManager $txAuditManager;
+    private TxTemplateManager $txTemplateManager;
     
     public function __construct(private string $dbPath, private array $userPrefs)
     {
@@ -34,6 +36,7 @@ class Application
         $this->categoryManager = new CategoryManager($repo);
         $this->ledgerTxManager = new LedgerTxManager($repo);
         $this->txAuditManager = new TxAuditManager($repo);
+        $this->txTemplateManager = new TxTemplateManager($repo);
     }
 
     /**
@@ -50,7 +53,7 @@ class Application
                 $this->initDb();
                 break;
             case 'add-tx':
-                $this->executeAddTransaction($argv, $this->transactionManager);
+                $this->executeAddTransaction($argv, $this->transactionManager, $this->txTemplateManager);
                 break;
             case 'transfer':
                 $this->executeTransfer($argv, $this->transactionManager);
@@ -97,6 +100,18 @@ class Application
             case 'list-ledgerTxs':
                 $this->listLedgerTxs($this->ledgerTxManager);
                 break;
+            case 'add-tx-tmp':
+                $this->executeAddTxTemplate($argv, $this->txTemplateManager);
+                break;
+            case 'update-tx-tmp':
+                $this->executeUpdateTxTemplate($argv, $this->txTemplateManager);
+                break;
+            case 'delete-tx-tmp':
+                $this->executeDeleteTxTemplate($argv, $this->txTemplateManager);
+                break;
+            case 'list-tx-tmp':
+                $this->listTxTemplates($this->txTemplateManager);
+                break;
             case 'list-audit':
                 $this->listAudit($argv, $this->txAuditManager);
                 break;
@@ -124,10 +139,35 @@ class Application
      * 
      * @param array $argv コマンドライン引数の配列
      * @param TransactionManager $manager 取引管理サービス
+     * @param TxTemplateManager $tmpManager テンプレート管理サービス
      */
-    private function executeAddTransaction(array $argv, TransactionManager $manager): void
+    private function executeAddTransaction(array $argv, TransactionManager $manager, TxTemplateManager $tmpManager): void
     {
         $args = array_slice($argv, 2);
+        if (count($args) < 1) {
+            throw new \InvalidArgumentException('Not enough arguments. Usage: add-transaction [date] [amount] [categoryId] [accountId] [transactionType] [note?] or add-tx [date] --tmp templateName');
+        }
+
+        // テンプレートから取引を追加する場合の処理
+        if (isset($args[1]) && $args[1] === '--tmp') {
+            $templateName = $args[2] ?? null;
+            if ($templateName === null) {
+                throw new \InvalidArgumentException('Please specify the template name.');
+            }
+            $date = new \DateTimeImmutable($args[0]);
+            $entry = $tmpManager->buildTxFromTemplate($templateName, $date);
+
+            if (!$this->confirmTxData($entry)) {
+                echo "Transaction registration cancelled.\n";
+                return;
+            }
+            
+            $manager->registerTxWithAccount($entry);
+            echo "Transaction added from template '{$templateName}'.\n";
+            return;
+        }
+
+        // 通常の取引追加の処理
         if (count($args) < 4) {
             throw new \InvalidArgumentException('Not enough arguments. Usage: add-transaction [date] [amount] [categoryId] [accountId] [transactionType] [note?]');
         }
@@ -854,6 +894,165 @@ class Application
 
 
     /**
+     * 新しい取引テンプレートを追加する
+     *
+     * Usage:
+     *   bin/ledger add-tx-tmp [name] [amount] [categoryId] [accountId] [transactionType] [note?]
+     *
+     *  - name: テンプレート名
+     *  - amount: 金額
+     *  - categoryId: カテゴリID
+     *  - accountId: アカウントID
+     *  - transactionType: 取引タイプ（1=INCOME, 2=EXPENSE, 3=TRANSFER）
+     *  - note: (任意) メモ文字列
+     *
+     * @param array $argv
+     * @param TxTemplateManager $manager
+     */
+    private function executeAddTxTemplate(array $argv, TxTemplateManager $manager): void
+    {
+        $args = array_slice($argv, 2);
+        if (count($args) < 5) {
+            throw new \InvalidArgumentException('Not enough arguments. Usage: add-tx-tmp [name] [amount] [categoryId] [accountId] [transactionType] [note?]');
+        }
+
+        $name = $args[0];
+        $amount = (float)$args[1];
+        $categoryId = (int)$args[2];
+        $accountId = (int)$args[3];
+        $transactionType = (int)$args[4];
+        $note = $args[5] ?? null;
+
+        $entry = new \App\Entity\TxTemplateEntry(
+            null,
+            $name,
+            $amount,
+            $categoryId,
+            $accountId,
+            $transactionType,
+            $note
+        );
+
+        $manager->validateTxTemplate($entry);
+        $manager->registerTxTemplate($entry);
+        echo "Transaction template '{$name}' added.\n";
+    }
+
+
+    /**
+     * テンプレートを更新する
+     *
+     * Usage:
+     *   bin/ledger update-tx-tmp [ID] [--name=...] [--amount=...] [--category=...] [--account=...] [--type=...] [--note=...]
+     *
+     * @param array $argv
+     * @param TxTemplateManager $manager
+     */
+    private function executeUpdateTxTemplate(array $argv, TxTemplateManager $manager): void
+    {
+        $args = array_slice($argv, 2);
+        if (empty($args)) {
+            throw new \InvalidArgumentException('Please specify ID and options. Usage: update-tx-tmp [ID] [--name=...] [--amount=...] [--category=...] [--account=...] [--type=...] [--note=...]');
+        }
+
+        // ID を先頭で指定
+        $idToken = $args[0];
+        if (!is_numeric($idToken) || (int)$idToken <= 0) {
+            throw new \InvalidArgumentException('Please specify the template id as a positive integer.');
+        }
+        $id = (int)$idToken;
+
+        // 残りの引数をフラグとして解析 (--key=value または --key value)
+        $rest = array_slice($args, 1);
+        $updates = [];
+        $flagsWithoutValue = [];
+        $i = 0;
+        $n = count($rest);
+
+        while ($i < $n && str_starts_with($rest[$i], '--')) {
+            $arg = $rest[$i++];
+            $pair = substr($arg, 2);
+            if ($pair === '') continue;
+            if (str_contains($pair, '=')) {
+                [$k, $v] = array_pad(explode('=', $pair, 2), 2, null);
+                $updates[$k] = $v;
+            } else {
+                $flagsWithoutValue[] = $pair;
+            }
+        }
+
+        // 位置引数から flagsWithoutValue に対応する値を取得
+        $posValues = array_slice($rest, $i);
+        if (count($posValues) !== count($flagsWithoutValue)) {
+            throw new \InvalidArgumentException('The number of flags without "=" does not match the number of supplied values.');
+        }
+        foreach ($flagsWithoutValue as $idx => $key) {
+            $updates[$key] = $posValues[$idx];
+        }
+
+        // 現行テンプレート取得
+        $curr = $manager->findTemplateById($id);
+        if ($curr === null) {
+            throw new \InvalidArgumentException("Template id={$id} not found.");
+        }
+
+        // マージ（許可キー: name, amount, category, account, type, note）
+        $name = $updates['name'] ?? $curr->name;
+        $amount = isset($updates['amount']) ? (float)$updates['amount'] : $curr->amount;
+        $categoryId = isset($updates['category']) ? (int)$updates['category'] : $curr->categoryId;
+        $accountId = isset($updates['account']) ? (int)$updates['account'] : $curr->accountId;
+        $transactionType = isset($updates['type']) ? (int)$updates['type'] : $curr->transactionType;
+        $note = array_key_exists('note', $updates) ? $updates['note'] : $curr->note;
+
+        $entry = new \App\Entity\TxTemplateEntry($id, $name, $amount, $categoryId, $accountId, $transactionType, $note);
+
+        $manager->validateTxTemplate($entry);
+        $manager->updateTxTemplate($entry);
+        echo "Transaction template id={$id} updated.\n";
+    }
+
+
+    /**
+     * テンプレートを削除する
+     *
+     * Usage:
+     *   bin/ledger delete-tx-tmp [id]
+     *
+     * @param array $argv
+     * @param TxTemplateManager $manager
+     */
+    private function executeDeleteTxTemplate(array $argv, TxTemplateManager $manager): void
+    {
+        $id = isset($argv[2]) ? (int)$argv[2] : null;
+        if ($id === null || $id <= 0) {
+            throw new \InvalidArgumentException('Please specify the template id as a positive integer.');
+        }
+
+        $manager->deleteTxTemplate($id);
+        echo "Transaction template id={$id} deleted.\n";
+    }
+
+
+    /**
+     * 全ての取引テンプレートを表示する
+     *
+     * @param TxTemplateManager $manager
+     */
+    private function listTxTemplates(TxTemplateManager $manager): void
+    {
+        $templates = $manager->findAllTemplates();
+        if (empty($templates)) {
+            echo "No transaction template.\n";
+            return;
+        }
+
+        foreach ($templates as $tmp) {
+            echo "{$tmp->id} {$tmp->name} categoryId:{$tmp->categoryId} accountId:{$tmp->accountId} type:{$tmp->transactionType} note:{$tmp->note}\n";
+        }
+    }
+
+
+    /**
      * 監査ログを表示する
      *
      * @param array $argv
@@ -908,7 +1107,7 @@ class Application
         echo "  delete-tx [ID]\n\tDelete a transaction\n";
         echo "  list-txs\n\tList all transactions\n";
         echo "  download-txs-csv [period] [outputPath?]\n\tDownload transactions as CSV for the given period\n";
-        echo "  transfer [date] [amount] [fromAccountId] [toAccountId] [categoryId?] [note?]\n\tAdd a transfer transaction\n";
+        echo "  transfer [date] [amount] [fromAccountId] [toAccountId] [note?] [categoryId?]\n\tAdd a transfer transaction\n";
         echo "  add-ledger [period]\n\tAdd a new ledger for the given period (e.g., '2023-09')\n";
         echo "  summary [fromPeriod] [toPeriod?]\n\tShow summary for a given period (e.g., '2023-09')\n";
         echo "  add-account [name] [type] [balance]\n\tAdd a new account\n";
@@ -919,6 +1118,10 @@ class Application
         echo "  delete-category [--reassign] [--force] [ID] [reassignID]\n\tDelete a category\n";
         echo "  list-categories\n\tList all categories\n";
         echo "  list-ledgerTxs\n\tList all ledger-transaction associations\n";
+        echo "  add-tx-tmp [name] [amount] [categoryId] [accountId] [transactionType] [note?]\n\tAdd a new transaction template\n";
+        echo "  update-tx-tmp [ID] [--name=...] [--amount=...] [--category=...] [--account=...] [--type=...] [--note=...]\n\tUpdate a transaction template\n";
+        echo "  delete-tx-tmp [ID]\n\tDelete a transaction template\n";
+        echo "  list-tx-tmp\n\tList all transaction templates\n";
         echo "  list-audit [--txId=] [--operate=]\n\tList audit logs\n";
     }
 

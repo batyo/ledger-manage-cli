@@ -6,6 +6,7 @@ use App\Entity\TransactionEntry;
 use App\Entity\CategoryEntry;
 use App\Entity\AccountEntry;
 use App\Entity\LedgerEnrtry;
+use App\Entity\TxTemplateEntry;
 
 /**
  * リポジトリインターフェース
@@ -72,6 +73,56 @@ interface RepositoryInterface
      * @return int 挿入された振替グループのID
      */
     public function insertTransferGroup(): int;
+
+
+    /**
+     * テンプレートを挿入する
+     *
+     * @param TxTemplateEntry $entry
+     */
+    public function insertTemplate(TxTemplateEntry $entry): void;
+
+
+    /**
+     * 名前でテンプレートを取得する
+     *
+     * @param string $name テンプレート名
+     * @return TxTemplateEntry|null テンプレートエントリ、存在しない場合は null
+     */
+    public function fetchTemplateByName(string $name): ?TxTemplateEntry;
+
+
+    /**
+     * IDでテンプレートを取得する
+     *
+     * @param int $id
+     * @return TxTemplateEntry|null
+     */
+    public function fetchTemplateById(int $id): ?TxTemplateEntry;
+
+
+    /**
+     * テンプレートを更新する
+     *
+     * @param TxTemplateEntry $entry
+     */
+    public function updateTemplate(TxTemplateEntry $entry): void;
+
+
+    /**
+     * テンプレートを削除する
+     *
+     * @param TxTemplateEntry $entry
+     */
+    public function deleteTemplate(TxTemplateEntry $entry): void;
+
+
+    /**
+     * 全てのテンプレートを取得する
+     *
+     * @return TxTemplateEntry[] テンプレートエントリの配列
+     */
+    public function fetchAllTemplates(): array;
 
 
     // Audit (transaction_audit)
