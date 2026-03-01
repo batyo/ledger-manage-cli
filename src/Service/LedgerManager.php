@@ -27,7 +27,14 @@ class LedgerManager
      */
     public function registerLedger(LedgerEnrtry $ledger): void
     {
-        $this->repo->insertLedger($ledger);
+        $this->repo->beginTransaction();
+        try {
+            $this->repo->insertLedger($ledger);
+            $this->repo->commit();
+        } catch (\Throwable $e) {
+            $this->repo->rollBack();
+            throw $e;
+        }
     }
 
     /**
