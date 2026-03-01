@@ -460,7 +460,7 @@ class Application
      * 指定期間の取引を CSV に保存する
      *
      * Usage:
-     *   bin/ledger txListToCsv [period] [outputPath?]
+     *   bin/ledger txListToCsv [period] [fileName?]
      *   period: YYYY-MM（省略時は当月）
     */
     private function executeTxListToCsv(array $argv, TransactionManager $manager, CategoryManager $catManager, AccountManager $accManager): void
@@ -471,7 +471,14 @@ class Application
             throw new \InvalidArgumentException('Please specify the period in YYYY-MM format.');
         }
 
-        $output = $argv[3] ?? __DIR__ . "/../../data/download/txlist_{$period}.csv";
+        $fileName =  $argv[3] ?? "txlist_{$period}";
+        $output = __DIR__ . "/../../data/download/{$fileName}.csv";
+
+        // 存在しない場合作成
+        $outputDir = dirname($output);
+        if (!is_dir($outputDir)) {
+            mkdir($outputDir, 0755, true);
+        }
 
         $transactions = $manager->filterTransactions(['period' => $period]);
         if (empty($transactions)) {
@@ -1106,7 +1113,7 @@ class Application
         echo "  update-tx [--field ...] [ID] [values ...]\n\tUpdate fields of a transaction\n";
         echo "  delete-tx [ID]\n\tDelete a transaction\n";
         echo "  list-txs\n\tList all transactions\n";
-        echo "  download-txs-csv [period] [outputPath?]\n\tDownload transactions as CSV for the given period\n";
+        echo "  download-txs-csv [period] [fileName?]\n\tDownload transactions as CSV for the given period\n";
         echo "  transfer [date] [amount] [fromAccountId] [toAccountId] [note?] [categoryId?]\n\tAdd a transfer transaction\n";
         echo "  add-ledger [period]\n\tAdd a new ledger for the given period (e.g., '2023-09')\n";
         echo "  summary [fromPeriod] [toPeriod?]\n\tShow summary for a given period (e.g., '2023-09')\n";
