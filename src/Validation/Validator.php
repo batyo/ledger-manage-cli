@@ -59,6 +59,7 @@ class Validator
      */
     public static function validateTxId($value): bool
     {
+        if (is_numeric($value)) $value = (int)$value;
         return is_int($value) && $value > 0;
     }
 
