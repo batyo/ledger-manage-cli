@@ -402,7 +402,7 @@ class Application
             $filter['transactionType'] = (int)$options['type'];
         }
         if (!empty($options['transfer'])) {
-            $filter['transfer_group_id'] = (int)$options['transfer'];
+            $filter['transferGroupId'] = (int)$options['transfer'];
         }
 
         $transactions = $txManager->filterTransactions($filter);
