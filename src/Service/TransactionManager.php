@@ -652,7 +652,7 @@ class TransactionManager
      */
     public function getTxType(TransactionEntry $tx): string
     {
-        $txType = "Unkown";
+        $txType = "Unknown";
         if ($tx->isIncome()) $txType = "Income";
         if ($tx->isExpense()) $txType = "Expense";
         if ($tx->isTransfer()) $txType = "Transfer";
