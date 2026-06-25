@@ -879,7 +879,7 @@ class Application
         }
 
         foreach ($accounts as $account) {
-            $typeName = $account->getAccountTypeName($account->accountType);
+            $typeName = $account->getAccountTypeName();
             echo "{$account->id} {$account->name}  {$typeName}({$account->accountType}) ¥{$account->balance}\n";
         }
     }
@@ -982,6 +982,9 @@ class Application
             if ($pair === '') continue;
             if (str_contains($pair, '=')) {
                 [$k, $v] = array_pad(explode('=', $pair, 2), 2, null);
+                if (!in_array($k, ['name', 'amount', 'category', 'account', 'type', 'note'], true)) {
+                    throw new \InvalidArgumentException("Unknown option --{$k}");
+                }
                 $updates[$k] = $v;
             } else {
                 $flagsWithoutValue[] = $pair;
