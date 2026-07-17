@@ -1112,27 +1112,27 @@ class Application
         echo "Usage: php app.php [command] [options]\n";
         echo "Commands:\n";
         echo "  init-db\n\tInitialize the database\n";
-        echo "  add-tx [date] [amount] [categoryId] [accountId] [transactionType] [note]\n\tAdd a new transaction\n";
-        echo "  update-tx [--field ...] [ID] [values ...]\n\tUpdate fields of a transaction\n";
-        echo "  delete-tx [ID]\n\tDelete a transaction\n";
-        echo "  list-txs\n\tList all transactions\n";
-        echo "  download-txs-csv [period] [fileName?]\n\tDownload transactions as CSV for the given period\n";
-        echo "  transfer [date] [amount] [fromAccountId] [toAccountId] [note?] [categoryId?]\n\tAdd a transfer transaction\n";
-        echo "  add-ledger [period]\n\tAdd a new ledger for the given period (e.g., '2023-09')\n";
-        echo "  summary [fromPeriod] [toPeriod?]\n\tShow summary for a given period (e.g., '2023-09')\n";
+        echo "  add-tx [date] [amount] [categoryId] [accountId] [transactionType] [note]\n\tAdd a new transaction. Use '--tmp templateName' to build from template\n";
+        echo "  update-tx [--date|--amount|--category|--account|--type|--note] [ID] [values...]\n\tUpdate fields of a transaction (specify flags then ID then values)\n";
+        echo "  delete-tx [ID]\n\tDelete a transaction by ID\n";
+        echo "  list-txs [--period=YYYY-MM] [--category=ID] [--account=ID] [--type=1|2|3] [--transfer=groupId]\n\tList transactions with optional filters\n";
+        echo "  download-txs-csv [period] [fileName?]\n\tSave transactions for period (YYYY-MM) to data/download/<fileName>.csv\n";
+        echo "  transfer [date] [amount] [fromAccountId] [toAccountId] [note?] [categoryId?]\n\tAdd a transfer (will prompt for confirmation)\n";
+        echo "  add-ledger [period]\n\tCreate a ledger for the given period (YYYY-MM)\n";
+        echo "  summary [fromPeriod] [toPeriod?]\n\tShow income/expense summary for a period range\n";
         echo "  add-account [name] [type] [balance]\n\tAdd a new account\n";
-        echo "  update-account [--field ...] [ID] [values ...]\n\tUpdate fields of an account\n";
+        echo "  update-account [--name|--type|--balance] [ID] [values...]\n\tUpdate fields of an account (specify flags then ID then values)\n";
         echo "  list-accounts\n\tList all accounts\n";
-        echo "  add-category [name] [type]\n\tAdd a new category (type: 1 for INCOME, 2 for EXPENSE)\n";
-        echo "  update-category [--field ...] [ID] [values ...]\n\tUpdate fields of a category\n";
-        echo "  delete-category [--reassign] [--force] [ID] [reassignID]\n\tDelete a category\n";
+        echo "  add-category [name] [type]\n\tAdd a new category (type: 1=INCOME, 2=EXPENSE, 3=TRANSFER)\n";
+        echo "  update-category [--name|--type] [ID] [values...]\n\tUpdate fields of a category\n";
+        echo "  delete-category [--reassign] [--force] ID [reassignID]\n\tDelete a category; use --reassign to move items to reassignID\n";
         echo "  list-categories\n\tList all categories\n";
         echo "  list-ledgerTxs\n\tList all ledger-transaction associations\n";
-        echo "  add-tx-tmp [name] [amount] [categoryId] [accountId] [transactionType] [note?]\n\tAdd a new transaction template\n";
+        echo "  add-tx-tmp [name] [amount] [categoryId] [accountId] [transactionType] [note?]\n\tAdd a transaction template\n";
         echo "  update-tx-tmp [ID] [--name=...] [--amount=...] [--category=...] [--account=...] [--type=...] [--note=...]\n\tUpdate a transaction template\n";
         echo "  delete-tx-tmp [ID]\n\tDelete a transaction template\n";
         echo "  list-tx-tmp\n\tList all transaction templates\n";
-        echo "  list-audit [--txId=] [--operate=]\n\tList audit logs\n";
+        echo "  list-audit [--txId=ID] [--operate=op]\n\tList audit logs (filter by txId and/or operate)\n";
     }
 
     /**
