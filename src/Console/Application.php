@@ -13,6 +13,9 @@ use App\Service\LedgerTxManager;
 use App\Service\TxAuditManager;
 use App\Service\TxTemplateManager;
 use App\Validation\Validator;
+use CLI\Display\Display;
+use CLI\Display\Style;
+use CLI\Display\EncodingHelper;
 
 /**
  * コンソールアプリケーションクラス
@@ -26,6 +29,7 @@ class Application
     private LedgerTxManager $ledgerTxManager;
     private TxAuditManager $txAuditManager;
     private TxTemplateManager $txTemplateManager;
+    private Display $display;
     
     public function __construct(private string $dbPath, private array $userPrefs)
     {
@@ -37,6 +41,7 @@ class Application
         $this->ledgerTxManager = new LedgerTxManager($repo);
         $this->txAuditManager = new TxAuditManager($repo);
         $this->txTemplateManager = new TxTemplateManager($repo);
+        $this->display = new Display();
     }
 
     /**
@@ -128,7 +133,7 @@ class Application
     {
         $repo = new SqliteRepository($this->dbPath);
         $repo->init();
-        echo "Database initialized at {$this->dbPath}\n";
+        $this->display->box("Database initialized at {$this->dbPath}", 0, new Style('green', null, true));
     }
 
     /**
@@ -158,12 +163,12 @@ class Application
             $entry = $tmpManager->buildTxFromTemplate($templateName, $date);
 
             if (!$this->confirmTxData($entry)) {
-                echo "Transaction registration cancelled.\n";
+                $this->display->text('Transaction registration cancelled.', new Style('yellow'));
                 return;
             }
             
             $manager->registerTxWithAccount($entry);
-            echo "Transaction added from template '{$templateName}'.\n";
+            $this->display->text("Transaction added from template '{$templateName}'.", new Style('green', null, true));
             return;
         }
 
@@ -192,12 +197,12 @@ class Application
         );
 
         if (!$this->confirmTxData($entry)) {
-            echo "Transaction registration cancelled.\n";
+            $this->display->text('Transaction registration cancelled.', new Style('yellow'));
             return;
         }
 
         $manager->registerTxWithAccount($entry);
-        echo "Transaction added.\n";
+        $this->display->text('Transaction added.', new Style('green', null, true));
     }
 
 
@@ -243,7 +248,7 @@ class Application
                 if ($cat === null) {
                     throw new \InvalidArgumentException("Preferred transfer category id={$categoryId} not found. Please update your config/user_prefs.php or pass categoryId explicitly.");
                 }
-                echo "Using preferred transfer category id={$categoryId}\n";
+                $this->display->text("Using preferred transfer category id={$categoryId}", new Style('cyan'));
             }
         }
 
@@ -256,31 +261,45 @@ class Application
         $fromName = $accMap[$from] ?? (string)$from;
         $toName = $accMap[$to] ?? (string)$to;
 
-        echo "登録内容を確認してください:\n";
-        echo "  日付: {$date->format('Y-m-d')}\n";
-        echo "  金額: ¥{$amount}\n";
-        echo "  振替元: {$fromName} ({$from})\n";
-        echo "  振替先: {$toName} ({$to})\n";
+        // Build single-line field entries (strip internal newlines)
+        $fields = [];
+        $fields[] = '登録内容を確認してください:';
+        $fields[] = '  日付: ' . str_replace(["\r", "\n"], ' ', $date->format('Y-m-d'));
+        $fields[] = '  金額: ¥' . str_replace(["\r", "\n"], ' ', (string)$amount);
+        $fields[] = '  振替元: ' . str_replace(["\r", "\n"], ' ', "{$fromName} ({$from})");
+        $fields[] = '  振替先: ' . str_replace(["\r", "\n"], ' ', "{$toName} ({$to})");
         if ($categoryId !== null) {
             $catMap = $this->categoryManager->getCategoryMap();
             $catName = $catMap[$categoryId] ?? (string)$categoryId;
-            echo "  カテゴリ: {$catName} ({$categoryId})\n";
+            $fields[] = '  カテゴリ: ' . str_replace(["\r", "\n"], ' ', "{$catName} ({$categoryId})");
         } else {
-            echo "  カテゴリ: (未指定)\n";
+            $fields[] = '  カテゴリ: (未指定)';
         }
-        echo "  メモ: " . ($note !== null ? $note : '(なし)') . "\n";
-        echo "登録しますか？ (y/n): ";
+        $fields[] = '  メモ: ' . str_replace(["\r", "\n"], ' ', ($note !== null ? $note : '(なし)'));
+
+        // determine box width based on all field lines (include header)
+        $max = 0;
+        foreach ($fields as $f) {
+            $w = EncodingHelper::getDisplayWidth($f);
+            if ($w > $max) $max = $w;
+        }
+        // add extra margin so wrap() won't split lines whose width == max
+        // larger margin avoids edge-case splits for multibyte chars
+        $boxWidth = $max + 8;
+        $this->printBoxNoWrap($fields, new Style(null, null, false));
+        // prompt
+        echo $this->display->colorText('登録しますか？ (y/n): ', 'yellow', null, true);
 
         $handle = fopen("php://stdin", "r");
         $line = $handle === false ? '' : fgets($handle);
         $answer = strtolower(trim((string)$line));
         if ($answer !== 'y' && $answer !== 'yes') {
-            echo "Transfer cancelled.\n";
+            $this->display->text('Transfer cancelled.', new Style('yellow'));
             return;
         }
 
         [$fromTxId, $toTxId] = $manager->registerTransfer($date, $amount, $from, $to, $categoryId, $note);
-        echo "Transfer completed. fromTxId={$fromTxId} toTxId={$toTxId}\n";
+        $this->display->text("Transfer completed. fromTxId={$fromTxId} toTxId={$toTxId}", new Style('green', null, true));
     }
 
 
@@ -355,7 +374,7 @@ class Application
 
         // 実行
         $manager->updateTransactionFields($id, $date, $amount, $categoryId, $accountId, $transactionType, $note);
-        echo "Transaction id={$id} updated.\n";
+        $this->display->text("Transaction id={$id} updated.", new Style('green'));
     }
 
 
@@ -374,7 +393,7 @@ class Application
         }
 
         $manager->deleteTransaction($id);
-        echo "Transaction id={$id} deleted.\n";
+        $this->display->text("Transaction id={$id} deleted.", new Style('green'));
     }
 
 
@@ -407,21 +426,29 @@ class Application
 
         $transactions = $txManager->filterTransactions($filter);
         if (empty($transactions)) {
-            echo "No transaction.\n";
-            exit();
+            $this->display->text('No transaction.', new Style('yellow'));
+            return;
         }
 
+        $rows = [];
+        $rows[] = ['id', 'date', 'amount', 'category', 'category_id', 'account', 'account_id', 'type', 'note', 'transfer_group_id'];
+        $categoryMap = $catManager->getCategoryMap();
+        $accountMap = $accManager->getAccountMap();
         foreach ($transactions as $t) {
-            $categoryMap = $catManager->getCategoryMap();
-            $categoryName = $categoryMap[$t->categoryId] ?? (string)$t->categoryId;
-
-            $accountMap = $accManager->getAccountMap();
-            $accountName = $accountMap[$t->accountId] ?? (string)$t->accountId;
-
-            $txType = $txManager->getTxType($t);
-            
-            echo "{$t->id} {$t->date->format('Y-m-d')} ¥{$t->amount} {$categoryName}({$t->categoryId}) {$accountName}({$t->accountId}) {$txType} [{$t->note}] tran_group:{$t->transferGroupId}\n";
+            $rows[] = [
+                $t->id,
+                $t->date->format('Y-m-d'),
+                '¥' . $t->amount,
+                $categoryMap[$t->categoryId] ?? (string)$t->categoryId,
+                $t->categoryId,
+                $accountMap[$t->accountId] ?? (string)$t->accountId,
+                $t->accountId,
+                $txManager->getTxType($t),
+                $t->note ?? '',
+                $t->transferGroupId ?? ''
+            ];
         }
+        $this->display->table($rows, null, true);
     }
 
 
@@ -482,7 +509,7 @@ class Application
 
         $transactions = $manager->filterTransactions(['period' => $period]);
         if (empty($transactions)) {
-            echo "No transaction.\n";
+            $this->display->text('No transaction.', new Style('yellow'));
             return;
         }
 
@@ -516,7 +543,7 @@ class Application
         }
         fclose($fp);
 
-        echo "CSV saved to {$output}\n";
+        $this->display->text("CSV saved to {$output}", new Style('green'));
     }
 
 
@@ -544,7 +571,7 @@ class Application
 
         $ledgerEntry = new LedgerEnrtry(null, $period, $transactions);
         $ledgerManager->registerLedger($ledgerEntry);
-        echo "Ledger added.\n";
+        $this->display->text('Ledger added.', new Style('green'));
     }
 
 
@@ -567,20 +594,33 @@ class Application
         arsort($summary['expenseByCategories']);
 
         $toPeriodDisplay = $toPeriod ?? $period;
-        echo "Summary for {$period} ~ {$toPeriodDisplay}:\n\n";
-        echo "Income: {$summary['income']}\n";
-        echo "Expense: {$summary['expense']}\n";
-        echo "Balance: {$summary['balance']}\n\n";
-        echo "By Categories\n\n";
-        echo "--Income--\n";
+        $this->display->header("Summary for {$period} ~ {$toPeriodDisplay}", 'standard', new Style('blue', null, true));
+        $this->display->text("Income: {$summary['income']}");
+        $this->display->text("Expense: {$summary['expense']}");
+        $this->display->text("Balance: {$summary['balance']}");
+
+        // Income by categories
+        $incomeRows = [['Category', 'Amount']];
         foreach ($summary['incomeByCategories'] as $catId => $value) {
             $name = $categoryMap[$catId] ?? (string)$catId;
-            echo "{$name}: {$value}\n";
+            $incomeRows[] = [$name, (string)$value];
         }
-        echo "\n--Expense--\n";
+        if (count($incomeRows) > 1) {
+            $this->display->text('');
+            $this->display->text('--Income--');
+            $this->display->table($incomeRows, null, true);
+        }
+
+        // Expense by categories
+        $expenseRows = [['Category', 'Amount']];
         foreach ($summary['expenseByCategories'] as $catId => $value) {
             $name = $categoryMap[$catId] ?? (string)$catId;
-            echo "{$name}: {$value}\n";
+            $expenseRows[] = [$name, (string)$value];
+        }
+        if (count($expenseRows) > 1) {
+            $this->display->text('');
+            $this->display->text('--Expense--');
+            $this->display->table($expenseRows, null, true);
         }
     }
 
@@ -606,7 +646,7 @@ class Application
             $categoryType
         );
         $manager->registerCategory($entry);
-        echo "Category '{$name}' added.\n";
+        $this->display->text("Category '{$name}' added.", new Style('green'));
     }
 
 
@@ -677,7 +717,7 @@ class Application
         $manager->validateCategoryForUpdate($currCategory->id, $newName, $newType);
 
         $manager->updateCategoryFields($id, $newName, $newType);
-        echo "Category id={$id} updated.\n";
+        $this->display->text("Category id={$id} updated.", new Style('green'));
     }
 
 
@@ -739,28 +779,30 @@ class Application
         }
 
         $manager->deleteCategory($id, $reassignId, $force);
-        echo "Category id={$id} deleted.\n";
+        $this->display->text("Category id={$id} deleted.", new Style('green'));
     }
 
 
     /**
      * 全てのカテゴリを表示する
      * 
-     * @param CategoryManager $manager　カテゴリ管理サービス
+     * @param CategoryManager $manager カテゴリ管理サービス
      */
     private function listCategories(CategoryManager $manager): void
     {
         $categories = $manager->findCategories();
 
         if (empty($categories)) {
-            echo "No categories.";
+            $this->display->text('No categories.', new Style('yellow'));
             return;
         }
-
+        $rows = [];
+        $rows[] = ['id', 'name', 'type'];
         foreach ($categories as $category) {
             $type = $category->isIncomeCategory() ? 'Income' : ($category->isExpenseCategory() ? 'Expense' : 'Transfer');
-            echo "{$category->id} {$category->name} ({$type})\n";
+            $rows[] = [$category->id, $category->name, $type];
         }
+        $this->display->table($rows, null, true);
     }
 
 
@@ -789,7 +831,7 @@ class Application
             $balance
         );
         $manager->registerAccount($entry);
-        echo "Account '{$name}' added.\n";
+        $this->display->text("Account '{$name}' added.", new Style('green'));
     }
 
 
@@ -860,7 +902,7 @@ class Application
         $manager->validateAccountForUpdate($currAccount->id, $newName, $newType, $newBalance);
 
         $manager->updateAccountFields($id, $newName, $newType, $newBalance);
-        echo "Account id={$id} updated.\n";
+        $this->display->text("Account id={$id} updated.", new Style('green'));
     }
 
 
@@ -874,14 +916,16 @@ class Application
         $accounts = $manager->findAccounts();
 
         if (empty($accounts)) {
-            echo "No accounts.";
+            $this->display->text('No accounts.', new Style('yellow'));
             return;
         }
-
+        $rows = [];
+        $rows[] = ['id', 'name', 'type', 'type_id', 'balance'];
         foreach ($accounts as $account) {
             $typeName = $account->getAccountTypeName();
-            echo "{$account->id} {$account->name}  {$typeName}({$account->accountType}) ¥{$account->balance}\n";
+            $rows[] = [$account->id, $account->name, $typeName, $account->accountType, '¥' . $account->balance];
         }
+        $this->display->table($rows, null, true);
     }
 
 
@@ -893,10 +937,16 @@ class Application
     private function listLedgerTxs(LedgerTxManager $manager): void
     {
         $ledgerTxs = $manager->findAllLedgerTxs();
-        if (empty($ledgerTxs)) echo "No data\n";
-        foreach ($ledgerTxs as $ledgerTx) {
-            echo "ledgerId: {$ledgerTx->ledgerId} txId: {$ledgerTx->transactionId}\n";
+        if (empty($ledgerTxs)) {
+            $this->display->text('No data', new Style('yellow'));
+            return;
         }
+        $rows = [];
+        $rows[] = ['ledgerId', 'transactionId'];
+        foreach ($ledgerTxs as $ledgerTx) {
+            $rows[] = [$ledgerTx->ledgerId, $ledgerTx->transactionId];
+        }
+        $this->display->table($rows, null, true);
     }
 
 
@@ -942,7 +992,7 @@ class Application
 
         $manager->validateTxTemplate($entry);
         $manager->registerTxTemplate($entry);
-        echo "Transaction template '{$name}' added.\n";
+        $this->display->text("Transaction template '{$name}' added.", new Style('green'));
     }
 
 
@@ -1018,7 +1068,7 @@ class Application
 
         $manager->validateTxTemplate($entry);
         $manager->updateTxTemplate($entry);
-        echo "Transaction template id={$id} updated.\n";
+        $this->display->text("Transaction template id={$id} updated.", new Style('green'));
     }
 
 
@@ -1039,7 +1089,7 @@ class Application
         }
 
         $manager->deleteTxTemplate($id);
-        echo "Transaction template id={$id} deleted.\n";
+        $this->display->text("Transaction template id={$id} deleted.", new Style('green'));
     }
 
 
@@ -1052,13 +1102,15 @@ class Application
     {
         $templates = $manager->findAllTemplates();
         if (empty($templates)) {
-            echo "No transaction template.\n";
+            $this->display->text('No transaction template.', new Style('yellow'));
             return;
         }
-
+        $rows = [];
+        $rows[] = ['id', 'name', 'categoryId', 'accountId', 'type', 'note'];
         foreach ($templates as $tmp) {
-            echo "{$tmp->id} {$tmp->name} categoryId:{$tmp->categoryId} accountId:{$tmp->accountId} type:{$tmp->transactionType} note:{$tmp->note}\n";
+            $rows[] = [$tmp->id, $tmp->name, $tmp->categoryId, $tmp->accountId, $tmp->transactionType, $tmp->note ?? ''];
         }
+        $this->display->table($rows, null, true);
     }
 
 
@@ -1093,46 +1145,50 @@ class Application
 
         $audits = $manager->findAllAudit($opts);
         if (empty($audits)) {
-            echo "No audit.\n";
+            $this->display->text('No audit.', new Style('yellow'));
             return;
         }
-
+        $rows = [];
+        $rows[] = ['id', 'txId', 'operate', 'info', 'created_at'];
         foreach ($audits as $audit) {
-            // $audit は App\Entity\TxAuditEntry であることを想定
             $txId = $audit->txId === null ? 'NULL' : $audit->txId;
             $info = $audit->info === null ? '' : json_encode($audit->info, JSON_UNESCAPED_UNICODE);
             $created = $audit->createdAt->format('Y-m-d H:i:s');
-            echo sprintf("%d txId:%s operate:%s info:%s created_at:%s\n", $audit->id, $txId, $audit->operate, $info, $created);
+            $rows[] = [$audit->id, $txId, $audit->operate, $info, $created];
         }
+        $this->display->table($rows, null, true);
     }
 
 
     private function printUsage(): void
     {
-        echo "Usage: php app.php [command] [options]\n";
-        echo "Commands:\n";
-        echo "  init-db\n\tInitialize the database\n";
-        echo "  add-tx [date] [amount] [categoryId] [accountId] [transactionType] [note]\n\tAdd a new transaction. Use '--tmp templateName' to build from template\n";
-        echo "  update-tx [--date|--amount|--category|--account|--type|--note] [ID] [values...]\n\tUpdate fields of a transaction (specify flags then ID then values)\n";
-        echo "  delete-tx [ID]\n\tDelete a transaction by ID\n";
-        echo "  list-txs [--period=YYYY-MM] [--category=ID] [--account=ID] [--type=1|2|3] [--transfer=groupId]\n\tList transactions with optional filters\n";
-        echo "  download-txs-csv [period] [fileName?]\n\tSave transactions for period (YYYY-MM) to data/download/<fileName>.csv\n";
-        echo "  transfer [date] [amount] [fromAccountId] [toAccountId] [note?] [categoryId?]\n\tAdd a transfer (will prompt for confirmation)\n";
-        echo "  add-ledger [period]\n\tCreate a ledger for the given period (YYYY-MM)\n";
-        echo "  summary [fromPeriod] [toPeriod?]\n\tShow income/expense summary for a period range\n";
-        echo "  add-account [name] [type] [balance]\n\tAdd a new account\n";
-        echo "  update-account [--name|--type|--balance] [ID] [values...]\n\tUpdate fields of an account (specify flags then ID then values)\n";
-        echo "  list-accounts\n\tList all accounts\n";
-        echo "  add-category [name] [type]\n\tAdd a new category (type: 1=INCOME, 2=EXPENSE, 3=TRANSFER)\n";
-        echo "  update-category [--name|--type] [ID] [values...]\n\tUpdate fields of a category\n";
-        echo "  delete-category [--reassign] [--force] ID [reassignID]\n\tDelete a category; use --reassign to move items to reassignID\n";
-        echo "  list-categories\n\tList all categories\n";
-        echo "  list-ledgerTxs\n\tList all ledger-transaction associations\n";
-        echo "  add-tx-tmp [name] [amount] [categoryId] [accountId] [transactionType] [note?]\n\tAdd a transaction template\n";
-        echo "  update-tx-tmp [ID] [--name=...] [--amount=...] [--category=...] [--account=...] [--type=...] [--note=...]\n\tUpdate a transaction template\n";
-        echo "  delete-tx-tmp [ID]\n\tDelete a transaction template\n";
-        echo "  list-tx-tmp\n\tList all transaction templates\n";
-        echo "  list-audit [--txId=ID] [--operate=op]\n\tList audit logs (filter by txId and/or operate)\n";
+        $this->display->text("Usage: php app.php [command] [options]\n");
+        $rows = [];
+        $rows[] = ['Command', 'Description', 'Guide'];
+        $rows[] = ['init-db', 'Init DB', 'init-db'];
+        $rows[] = ['add-tx', "Add transaction (supports --tmp)", 'add-tx [date] [amount] [categoryId] [accountId] [transactionType] [note]'];
+        $rows[] = ['update-tx', 'Update transaction', 'update-tx [--date|--amount|--category|--account|--type|--note] [ID] [values...]'];
+        $rows[] = ['delete-tx', 'Delete transaction', 'delete-tx [ID]'];
+        $rows[] = ['list-txs', 'List transactions', 'list-txs [--period=YYYY-MM] [--category=ID] [--account=ID] [--type=1|2|3] [--transfer=groupId]'];
+        $rows[] = ['download-txs-csv', 'Export CSV', 'download-txs-csv [period] [fileName?]'];
+        $rows[] = ['transfer', 'Add transfer', 'transfer [date] [amount] [fromAccountId] [toAccountId] [note?] [categoryId?]'];
+        $rows[] = ['add-ledger', 'Create ledger', 'add-ledger [period]'];
+        $rows[] = ['summary', 'Show summary', 'summary [fromPeriod] [toPeriod?]'];
+        $rows[] = ['add-account', 'Add account', 'add-account [name] [type] [balance]'];
+        $rows[] = ['update-account', 'Update account', 'update-account [--name|--type|--balance] [ID] [values...]'];
+        $rows[] = ['list-accounts', 'List accounts', 'list-accounts'];
+        $rows[] = ['add-category', 'Add category', 'add-category [name] [type]'];
+        $rows[] = ['update-category', 'Update category', 'update-category [--name|--type] [ID] [values...]'];
+        $rows[] = ['delete-category', 'Delete category', 'delete-category [--reassign] [--force] ID [reassignID]'];
+        $rows[] = ['list-categories', 'List categories', 'list-categories'];
+        $rows[] = ['list-ledgerTxs', 'List ledger entries', 'list-ledgerTxs'];
+        $rows[] = ['add-tx-tmp', 'Add tx template', 'add-tx-tmp [name] [amount] [categoryId] [accountId] [transactionType] [note?]'];
+        $rows[] = ['update-tx-tmp', 'Update tx template', 'update-tx-tmp [ID] [--name=...] [--amount=...] [--category=...] [--account=...] [--type=...] [--note=...]'];
+        $rows[] = ['delete-tx-tmp', 'Delete tx template', 'delete-tx-tmp [ID]'];
+        $rows[] = ['list-tx-tmp', 'List tx templates', 'list-tx-tmp'];
+        $rows[] = ['list-audit', 'List audit logs', 'list-audit [--txId=ID] [--operate=op]'];
+
+        $this->display->table($rows, null, true);
     }
 
     /**
@@ -1159,19 +1215,61 @@ class Application
 
         $date = $entry->date->format('Y-m-d');
         $amount = $entry->amount;
-        echo "登録内容を確認してください:\n";
-        echo "  日付: {$date}\n";
-        echo "  金額: ¥{$amount}\n";
-        echo "  カテゴリ: {$categoryName} ({$entry->categoryId})\n";
-        echo "  アカウント: {$accountName} ({$entry->accountId})\n";
-        echo "  取引タイプ: {$txTypeName} ({$entry->transactionType})\n";
-        echo "  メモ: " . ($entry->note ?? '') . "\n";
-        echo "登録しますか？ (y/n): ";
+        // Build single-line field entries (strip internal newlines)
+        $fields = [];
+        $fields[] = '登録内容を確認してください:';
+        $fields[] = '  日付: ' . str_replace(["\r", "\n"], ' ', $date);
+        $fields[] = '  金額: ¥' . str_replace(["\r", "\n"], ' ', (string)$amount);
+        $fields[] = '  カテゴリ: ' . str_replace(["\r", "\n"], ' ', "{$categoryName} ({$entry->categoryId})");
+        $fields[] = '  アカウント: ' . str_replace(["\r", "\n"], ' ', "{$accountName} ({$entry->accountId})");
+        $fields[] = '  取引タイプ: ' . str_replace(["\r", "\n"], ' ', "{$txTypeName} ({$entry->transactionType})");
+        $fields[] = '  メモ: ' . str_replace(["\r", "\n"], ' ', ($entry->note ?? ''));
+
+        // determine box width based on all field lines (include header)
+        $max = 0;
+        foreach ($fields as $f) {
+            $w = EncodingHelper::getDisplayWidth($f);
+            if ($w > $max) $max = $w;
+        }
+        // add extra margin so wrap() won't split lines whose width == max
+        // larger margin avoids edge-case splits for multibyte chars
+        $boxWidth = $max + 8;
+        $this->printBoxNoWrap($fields, new Style(null, null, false));
+        echo $this->display->colorText('登録しますか？ (y/n): ', 'yellow', null, true);
 
         $handle = fopen("php://stdin", "r");
         $line = $handle === false ? '' : fgets($handle);
         $answer = trim((string)$line);
 
         return in_array(strtolower($answer), ['y','yes'], true);
+    }
+
+
+    /**
+     * Print a box around given lines without applying wrap().
+     * Ensures each provided line is printed on a single line.
+     * @param string[] $lines
+     * @param Style|null $style
+     */
+    private function printBoxNoWrap(array $lines, ?Style $style = null): void
+    {
+        $max = 0;
+        foreach ($lines as $l) {
+            $w = EncodingHelper::getDisplayWidth($l);
+            if ($w > $max) $max = $w;
+        }
+        $width = $max + 4;
+        $top = '┌' . str_repeat('─', $width - 2) . '┐';
+        $bottom = '└' . str_repeat('─', $width - 2) . '┘';
+        $this->display->text($top, $style);
+        $contentWidth = $width - 4;
+        foreach ($lines as $l) {
+            $w = EncodingHelper::getDisplayWidth($l);
+            $pad = $contentWidth - $w;
+            if ($pad < 0) $pad = 0;
+            $line = '│ ' . $l . str_repeat(' ', $pad) . ' │';
+            $this->display->text($line, $style);
+        }
+        $this->display->text($bottom, $style);
     }
 }

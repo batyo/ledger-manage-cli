@@ -5,5 +5,7 @@
             "App\\": "src/"
         }
     },
-    "require": {}
+    "require": {
+        "batyo/php-cli-display-library": "^1.0"
+    }
 }
