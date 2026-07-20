@@ -131,6 +131,18 @@ class Application
      */
     private function initDb(): void
     {
+        // 警告と確認を表示して誤実行を防止
+        $this->display->box("警告: データベースを初期化します。\n既存データはすべて失われます。\n本当に初期化しても良いですか？", 0, new Style('red', null, true));
+        echo $this->display->colorText('続行しますか？ (y/n): ', 'yellow', null, true);
+
+        $handle = fopen("php://stdin", "r");
+        $line = $handle === false ? '' : fgets($handle);
+        $answer = strtolower(trim((string)$line));
+        if ($answer !== 'y' && $answer !== 'yes') {
+            $this->display->text('初期化をキャンセルしました。', new Style('yellow'));
+            return;
+        }
+
         $repo = new SqliteRepository($this->dbPath);
         $repo->init();
         $this->display->box("Database initialized at {$this->dbPath}", 0, new Style('green', null, true));
