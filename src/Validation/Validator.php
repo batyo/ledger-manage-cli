@@ -45,7 +45,10 @@ class Validator
      */
     public static function validateDateInYM($value): bool
     {
-        $date = \DateTimeImmutable::createFromFormat('Y-m', $value);
+        if (!is_string($value)) return false;
+
+        // !Y-m 常に月初(01日)を補完してパースする
+        $date = \DateTimeImmutable::createFromFormat('!Y-m', $value);
         if ($date === false) return false;
         return $date->format('Y-m') === $value;
     }
