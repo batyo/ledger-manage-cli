@@ -606,7 +606,7 @@ class Application
         arsort($summary['expenseByCategories']);
 
         $toPeriodDisplay = $toPeriod ?? $period;
-        $this->display->header("Summary for {$period} ~ {$toPeriodDisplay}", 'standard', new Style('blue', null, true));
+        $this->display->header("Summary for {$period} ~ {$toPeriodDisplay}", 'standard', new Style('green', null, true));
         $this->display->text("Income: {$summary['income']}");
         $this->display->text("Expense: {$summary['expense']}");
         $this->display->text("Balance: {$summary['balance']}");

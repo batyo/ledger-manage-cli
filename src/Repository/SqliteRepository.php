@@ -181,6 +181,9 @@ class SqliteRepository implements RepositoryInterface
         }
         if (isset($filter['period'])) {
             $where[] = 'date LIKE ?';
+            if ($filter['period'] === 'm' || $filter['period'] === 'M') {
+                $filter['period'] = date('Y-m');
+            }
             $params[] = $filter['period'] . '%';
         }
         if (isset($filter['transactionType'])) {
